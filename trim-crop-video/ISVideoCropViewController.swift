@@ -41,6 +41,8 @@ class ISVideoCropViewController: UIViewController {
     private var startTimePanGesture: UIPanGestureRecognizer = UIPanGestureRecognizer()
     private var endTimePanGesture: UIPanGestureRecognizer = UIPanGestureRecognizer()
     
+    private var cropButton: UIButton = UIButton(type: .custom)
+    
     init(url: URL, cropSize: CGSize) {
         self.url = url
         self.cropSize = cropSize
@@ -71,6 +73,12 @@ class ISVideoCropViewController: UIViewController {
         previewImagesScrollView.addSubview(timeRangeView)
         previewImagesScrollView.addSubview(startTimeView)
         previewImagesScrollView.addSubview(endTimeView)
+        
+        cropButton.setTitle("裁剪", for: .normal)
+        cropButton.addAction(.init(handler: { [weak self] _ in
+            self?.crop()
+        }), for: .touchUpInside)
+        view.addSubview(cropButton)
         
         videoContainerScrollView.delegate = self
         videoContainerScrollView.showsHorizontalScrollIndicator = false
@@ -346,6 +354,9 @@ class ISVideoCropViewController: UIViewController {
         
         previewImagesScrollView.bounds = CGRectMake(0, 0, maskView.frame.width, 105)
         previewImagesScrollView.center = CGPointMake(view.bounds.midX, playButton.frame.maxY + previewImagesScrollView.bounds.height * 0.5)
+        
+        cropButton.bounds = CGRectMake(0, 0, 100, 50)
+        cropButton.center = CGPointMake(view.bounds.midX, previewImagesScrollView.frame.maxY + 10 + 50 * 0.5)
     }
     
     override func viewDidAppear(_ animated: Bool) {
@@ -361,6 +372,8 @@ class ISVideoCropViewController: UIViewController {
         startTimeView.frame = CGRectMake(timeRangeView.frame.minX - 5 - 25, 0, 50, previewThumbSize.height)
         endTimeView.frame = CGRectMake(timeRangeView.frame.maxX + 5 - 25, 0, 50, previewThumbSize.height)
     }
+    
+    // MARK: Pan Gesture Handler
     
     private var centerX = 0.0
     private var centerMinX = 0.0
@@ -448,6 +461,64 @@ class ISVideoCropViewController: UIViewController {
             updateTimeRangeViewFrame()
             updatePlayerStartEndTime()
             centerTimeRangeView()
+        }
+    }
+    
+    // MARK: Crop
+    
+    private func crop() {
+        var cropRect = cropAreaView.convert(cropAreaView.bounds, to: videoPreviewView)
+        cropRect.origin = CGPointMake(
+            cropRect.minX / videoPreviewView.bounds.width * videoSize.width,
+            cropRect.minY / videoPreviewView.bounds.height * videoSize.height
+        )
+        cropRect.size = CGSizeMake(
+            cropRect.width / videoPreviewView.bounds.width * videoSize.width,
+            cropRect.height / videoPreviewView.bounds.height * videoSize.height
+        )
+        let originFlipTransform = CGAffineTransform(scaleX: 1, y: -1)
+        let frameTranslateTransform = CGAffineTransform(translationX: 0, y: videoSize.height)
+        cropRect = cropRect.applying(originFlipTransform)
+        cropRect = cropRect.applying(frameTranslateTransform)
+        
+        let asset = AVURLAsset(url: url)
+        let cropScaleComposition = AVMutableVideoComposition(asset: asset) { request in
+            guard let cropFilter = CIFilter(name: "CICrop") else {
+                request.finish(with: request.sourceImage, context: nil)
+                assert(false)
+                return
+            }
+            
+            cropFilter.setValue(request.sourceImage, forKey: kCIInputImageKey)
+            cropFilter.setValue(CIVector(cgRect: cropRect), forKey: "inputRectangle")
+            
+            let imageAtOrigin = cropFilter.outputImage?.transformed(by: CGAffineTransform(translationX: -cropRect.origin.x, y: -cropRect.origin.y)) ?? request.sourceImage
+            request.finish(with: imageAtOrigin, context: nil)
+        }
+        cropScaleComposition.renderSize = cropRect.size
+        
+        let outputPath = NSTemporaryDirectory() + UUID().uuidString + ".mp4"
+        let outputURL = URL(fileURLWithPath: outputPath)
+        
+        let timeRange = CMTimeRangeFromTimeToTime(start: startTime, end: endTime)
+        
+        if let exporter = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetHighestQuality) {
+            exporter.videoComposition = cropScaleComposition
+            exporter.outputURL = outputURL
+            exporter.outputFileType = .mp4
+            exporter.timeRange = timeRange
+            exporter.exportAsynchronously { [weak exporter, weak self] in
+                DispatchQueue.main.async {
+                    if let error = exporter?.error {
+                        debugPrint(error.localizedDescription)
+                    } else {
+                        NotificationCenter.default.post(name: NSNotification.Name("CropDone"), object: outputURL)
+                        self?.dismiss(animated: true)
+                    }
+                }
+            }
+        } else {
+            debugPrint("error")
         }
     }
 }

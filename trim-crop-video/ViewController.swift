@@ -34,7 +34,20 @@ class ViewController: UIViewController {
 
   @IBOutlet var startTimeSlider: UISlider!
   @IBOutlet var endTimeSlider: UISlider!
+    
+    var url: URL?
 
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        
+        NotificationCenter.default.addObserver(forName: NSNotification.Name("CropDone"), object: nil, queue: .main) { [weak self] note in
+            if let self, let url = note.object as? URL {
+                self.url = url
+                self.loadCleanVideo()
+            }
+        }
+    }
+    
   override func viewWillAppear(_ animated: Bool) {
     super.viewWillAppear(animated)
     loadCleanVideo()
@@ -76,12 +89,12 @@ class ViewController: UIViewController {
   }
 
   fileprivate func loadCleanVideo() {
-    self.player = AVPlayer(url: Bundle.main.url(forResource: "grocery-train", withExtension: "mov")!)
+    self.player = AVPlayer(url: url ?? Bundle.main.url(forResource: "grocery-train", withExtension: "mov")!)
     self.cropScaleComposition = nil
       
     let playerLayer = AVPlayerLayer(player: player)
     playerLayer.frame = playerView.layer.bounds
-    playerLayer.videoGravity = .resizeAspect
+      playerLayer.videoGravity = .resizeAspect
 
     playerView.layer.addSublayer(playerLayer)
 
@@ -130,7 +143,7 @@ class ViewController: UIViewController {
 
   @IBAction func playTapped(_ sender: UIButton) {
     self.croppingView.isHidden = true
-    self.prepareForCropping()
+    //self.prepareForCropping()
     player?.seek(to: startTime)
     self.endTimeObserver = player?.addBoundaryTimeObserver(forTimes: [NSValue(time: endTime)], queue: .main, using: {
       [weak self] in
