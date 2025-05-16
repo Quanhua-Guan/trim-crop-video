@@ -23,12 +23,16 @@ class ISVideoCropViewController: UIViewController {
     private var (maskView, maskLayer) = (UIView(), CAShapeLayer())
     private var cropAreaView = ISCropAreaView()
     private var (videoPreviewView, playerLayer, playButton) = (UIView(), AVPlayerLayer(), UIButton(type: .custom))
+    
     private var videoSize: CGSize = .zero
     private var videoDuration: Double = 0
     
     private var startTime: CMTime = .zero
     private var endTime: CMTime = .zero
     private var endTimeObserver: Any?
+    private var periodicTimeObserver: Any?
+    
+    private var progressIndicatorView: UIView = UIView()
     
     private var previewImagesScrollView = UIScrollView()
     private var previewImagesScrollViewContentView: UIView = UIView()
@@ -56,10 +60,10 @@ class ISVideoCropViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        setupUI()
+        setup()
     }
     
-    func setupUI() {
+    func setup() {
         view.backgroundColor = .black
         
         // 430x510
@@ -71,8 +75,14 @@ class ISVideoCropViewController: UIViewController {
         view.addSubview(playButton)
         view.addSubview(previewImagesScrollView)
         previewImagesScrollView.addSubview(timeRangeView)
+        previewImagesScrollView.addSubview(progressIndicatorView)
         previewImagesScrollView.addSubview(startTimeView)
         previewImagesScrollView.addSubview(endTimeView)
+        
+        progressIndicatorView.bounds = CGRectMake(0, 0, 2, previewThumbSize.height + 10)
+        progressIndicatorView.center = CGPointMake(0, previewThumbSize.height * 0.5)
+        progressIndicatorView.layer.cornerRadius = 1
+        progressIndicatorView.backgroundColor = .white.withAlphaComponent(0.9)
         
         cropButton.setTitle("裁剪", for: .normal)
         cropButton.addAction(.init(handler: { [weak self] _ in
@@ -87,8 +97,21 @@ class ISVideoCropViewController: UIViewController {
         cropAreaView.isUserInteractionEnabled = false
         playButton.setImage(UIImage(named: "diyLivePhotoPlay"), for: .normal)
         playButton.addAction(.init(handler: { [weak self] _ in
-            if let player = self?.playerLayer.player {
+            if let self, let player = self.playerLayer.player {
+                if let observer = self.periodicTimeObserver {
+                    player.removeTimeObserver(observer)
+                    self.periodicTimeObserver = nil
+                }
                 if player.rate == 0 {
+                    self.periodicTimeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 60), queue: .main) { [weak self] _ in
+                        if let self, let player = self.playerLayer.player {
+                            let currentTime = player.currentTime().seconds
+                            self.progressIndicatorView.center = CGPointMake(currentTime / self.videoDuration * self.previewImagesScrollViewContentView.bounds.width, self.timeRangeView.bounds.midY)
+                        }
+                    }
+                    if abs(player.currentTime().seconds - self.endTime.seconds) < 0.01 {
+                        player.seek(to: self.startTime, toleranceBefore: .zero, toleranceAfter: .zero)
+                    }
                     player.play()
                 } else {
                     player.pause()
@@ -152,6 +175,7 @@ class ISVideoCropViewController: UIViewController {
             self?.timeRangeView.alpha = 1
         }
         previewImagesScrollView.delegate = self
+        previewImagesScrollView.alpha = 0
     }
     
     private func getVideoPreviewImages(asset: AVURLAsset, complete: (([UIImage]) -> Void)?) {
@@ -224,6 +248,7 @@ class ISVideoCropViewController: UIViewController {
     }
     
     private func updatePreviewScrollView(duration: Double) {
+        previewImagesScrollView.alpha = 0
         let contentView = self.previewImagesScrollViewContentView
         previewImagesScrollView.addSubview(contentView)
         previewImagesScrollView.sendSubviewToBack(contentView)
@@ -249,13 +274,20 @@ class ISVideoCropViewController: UIViewController {
         
         x = 0.0
         let secSpacing = widthPerSecond / 10.0
-        for sec in 0...Int(duration * 10) {
+        let first = 0
+        let last = Int(duration * 10)
+        for sec in first...last {
             let v = UIView()
             v.backgroundColor = .white
             v.frame = CGRectMake(x - 0.5, 105 - 20.0, 1, 4)
             contentView.addSubview(v)
             if sec % 10 == 0 {
                 v.alpha = 1.0
+            } else {
+                v.alpha = 0.5
+            }
+            
+            if (sec == first || abs(sec - last) < 10) && sec % 10 == 0 {
                 let label = UILabel()
                 label.text = "\(sec / 10)S"
                 label.textColor = .white.withAlphaComponent(0.5)
@@ -264,10 +296,12 @@ class ISVideoCropViewController: UIViewController {
                 label.bounds = CGRectMake(0, 0, 100, 12)
                 label.center = CGPointMake(v.center.x, v.center.y + 15.0)
                 contentView.addSubview(label)
-            } else {
-                v.alpha = 0.5
             }
             x += secSpacing
+        }
+        
+        UIView.animate(withDuration: 0.2) {
+            self.previewImagesScrollView.alpha = 1.0
         }
     }
     
@@ -280,7 +314,7 @@ class ISVideoCropViewController: UIViewController {
         }
         endTimeObserver = player.addBoundaryTimeObserver(forTimes: [NSValue(time: endTime)], queue: .main, using: { [weak self] in
             guard let self, let player = self.playerLayer.player else { return }
-            player.seek(to: startTime)
+            player.seek(to: startTime, toleranceBefore: .zero, toleranceAfter: .zero)
             player.play()
         })
     }
@@ -413,7 +447,8 @@ class ISVideoCropViewController: UIViewController {
             playerLayer.player?.seek(to: cmtime, toleranceBefore: .zero, toleranceAfter: .zero)
             startTime = cmtime
         }
-        
+        progressIndicatorView.center = CGPointMake(startTime.seconds / videoDuration * previewImagesScrollViewContentView.bounds.width, timeRangeView.bounds.midY)
+
         if isEnded {
             updateTimeRangeViewFrame()
             updatePlayerStartEndTime()
@@ -456,6 +491,7 @@ class ISVideoCropViewController: UIViewController {
             playerLayer.player?.seek(to: cmtime, toleranceBefore: .zero, toleranceAfter: .zero)
             endTime = cmtime
         }
+        progressIndicatorView.center = CGPointMake(endTime.seconds / videoDuration * previewImagesScrollViewContentView.bounds.width, timeRangeView.bounds.midY)
         
         if isEnded {
             updateTimeRangeViewFrame()
@@ -560,6 +596,8 @@ extension ISVideoCropViewController: UIScrollViewDelegate {
             time = x / contentView.bounds.width * videoDuration
             cmtime = CMTimeMake(value: Int64(time * Double(timescale)), timescale: timescale)
             endTime = cmtime
+            
+            progressIndicatorView.center = CGPointMake(startTime.seconds / videoDuration * previewImagesScrollViewContentView.bounds.width, timeRangeView.bounds.midY)
         }
     }
     
@@ -663,6 +701,332 @@ class ISCropAreaView: UIView {
         lineViews[2].frame = CGRectMake(w / 3.0 * 1.0, 0, 0.5, h)
         // 线条 竖2
         lineViews[3].frame = CGRectMake(w / 3.0 * 2.0, 0, 0.5, h)
+    }
+    
+}
+
+class ISCropTimeRangeView: UIView {
+    
+    var didStopScroll: ((ISCropTimeRangeView) -> Void)?
+    var onStartTimeChanged: ((ISCropTimeRangeView) -> Void)?
+    var onStartTimeChangeEnded: ((ISCropTimeRangeView) -> Void)?
+    var onEndTimeChanged: ((ISCropTimeRangeView) -> Void)?
+    var onEndTimeChangeEnded: ((ISCropTimeRangeView) -> Void)?
+    
+    let duration: Double // 时长, 单位: s
+    let previewImages: [UIImage]
+    private var previewImageViews: [UIImageView] = []
+    private var scaleViews: [UIView] = [] // 刻度视图
+    private var secondViews: [UIView] = [] // 刻度秒数
+    
+    var startTime: CMTime = .zero
+    var endTime: CMTime = .zero
+    
+    var minDuration: Double = 0.5 // 最小选择时长, 单位: s
+    var maxDuration: Double = 6.0 // 最大选择时长, 单位: s
+    
+    private var widthPerSecond: Double = 129.0 // 底部图片预览进图视图, 每秒对应宽度, 单位: pt
+    let fps: Double
+    var horizonInset: Double
+    private var previewThumbSize: CGSize = CGSizeMake(30, 40)
+    
+    /// 当前进度指示器
+    private let progressIndicatorView: UIView = UIView()
+    
+    private let previewImagesScrollView = UIScrollView()
+    private let previewImagesScrollViewContentView: UIView = UIView()
+    private let imageContentView = UIView()
+    private var ignorePreviewImagesScrollViewScroll: Bool = false
+    
+    private let timeRangeView: UIView = UIView()
+    private let startTimeView: UIView = UIView()
+    private let endTimeView: UIView = UIView()
+    private let startTimePanGesture: UIPanGestureRecognizer = UIPanGestureRecognizer()
+    private let endTimePanGesture: UIPanGestureRecognizer = UIPanGestureRecognizer()
+    
+    init(duration: Double, previewImages: [UIImage], fps: Double, horizonInset: Double = 40, previewThumbSize: CGSize = CGSizeMake(30, 40)) {
+        self.duration = duration
+        self.previewImages = previewImages
+        self.fps = fps
+        self.horizonInset = horizonInset
+        self.previewThumbSize = previewThumbSize
+        super.init(frame: .zero)
+        setup()
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("no imp")
+    }
+    
+    private func setup() {
+        addSubview(previewImagesScrollView)
+        
+        let contentView = previewImagesScrollViewContentView
+        previewImagesScrollView.addSubview(contentView)
+        
+        previewImagesScrollView.addSubview(timeRangeView)
+        previewImagesScrollView.addSubview(progressIndicatorView)
+        previewImagesScrollView.addSubview(startTimeView)
+        previewImagesScrollView.addSubview(endTimeView)
+        
+        progressIndicatorView.bounds = CGRectMake(0, 0, 2, previewThumbSize.height + 10)
+        progressIndicatorView.center = CGPointMake(0, previewThumbSize.height * 0.5)
+        progressIndicatorView.layer.cornerRadius = 1
+        progressIndicatorView.backgroundColor = .white.withAlphaComponent(0.9)
+        
+        timeRangeView.layer.borderColor = UIColor.white.cgColor
+        timeRangeView.layer.borderWidth = 1.0
+        timeRangeView.backgroundColor = .clear
+        timeRangeView.alpha = 0
+        startTimeView.backgroundColor = .white.withAlphaComponent(0.5)
+        endTimeView.backgroundColor = .white.withAlphaComponent(0.5)
+        
+        startTimeView.addGestureRecognizer(startTimePanGesture)
+        startTimePanGesture.addTarget(self, action: #selector(handleStartTimePanGesture(gesture:)))
+        endTimeView.addGestureRecognizer(endTimePanGesture)
+        endTimePanGesture.addTarget(self, action: #selector(handleEndTimePanGesture(gesture:)))
+        
+        // 最小选择时长 min(0.5, 视频时长)
+        // 最大选择时长 min(6.0, 视频时长)
+        minDuration = min(0.5, duration)
+        maxDuration = min(6.0, duration)
+        
+        previewImagesScrollView.showsVerticalScrollIndicator = false
+        previewImagesScrollView.showsHorizontalScrollIndicator = false
+        
+        previewImagesScrollView.delegate = self
+        previewImagesScrollView.alpha = 0
+        
+        imageContentView.clipsToBounds = true
+        contentView.addSubview(imageContentView)
+        
+        var x = 0.0
+        for image in previewImages {
+            let imageView = UIImageView(image: image)
+            imageView.contentMode = .scaleAspectFill
+            imageView.clipsToBounds = true
+            imageContentView.addSubview(imageView)
+            previewImageViews.append(imageView)
+        }
+        
+        let first = 0
+        let last = Int(duration * 10)
+        for sec in first...last {
+            let v = UIView()
+            v.backgroundColor = .white
+            contentView.addSubview(v)
+            if sec % 10 == 0 {
+                v.alpha = 1.0
+            } else {
+                v.alpha = 0.5
+            }
+            scaleViews.append(v)
+            
+            if (sec == first || abs(sec - last) < 10) && sec % 10 == 0 {
+                let label = UILabel()
+                label.text = "\(sec / 10)S"
+                label.textColor = .white.withAlphaComponent(0.5)
+                label.font = .systemFont(ofSize: 8)
+                label.textAlignment = .center
+                contentView.addSubview(label)
+                
+                secondViews.append(label)
+            }
+        }
+    }
+    
+    static func calcFps(displayWidth w: Double, horizonInset: Double = 40.0, maxDuration: Double, previewThumbWidth: Double = 30.0) -> Double {
+        assert(maxDuration > 0)
+        let widthPerSecond = (w - horizonInset * 2) / maxDuration
+        let fps = max(1.0, widthPerSecond / previewThumbWidth)
+        return fps
+    }
+    
+    // MARK: Layout
+    
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        previewImagesScrollView.frame = bounds
+
+        guard bounds.width > 0, bounds.height > 0,
+              fps > 0, maxDuration > 0
+        else {
+            return
+        }
+        
+        // 取展示宽度 w
+        let w = bounds.width, h = bounds.height
+        let sv = previewImagesScrollView
+        // 左右间距默认 40
+        sv.contentInset = UIEdgeInsets(top: 0, left: horizonInset, bottom: 0, right: horizonInset)
+        // w - 40 * 2 -> 对应视频最大选择时长
+        widthPerSecond = (w - sv.contentInset.left - sv.contentInset.right) / maxDuration
+        // 小图预览宽高 previewThumbSize
+        // 计算每秒取预览图帧数 fps = withPerSecond / previewThumbSize.width
+        // fps = max(1.0, widthPerSecond / previewThumbSize.width)
+        // fps固定, 计算更新 previewThumbSize.width
+        previewThumbSize.width = widthPerSecond / fps
+        
+        previewImagesScrollView.contentSize = CGSizeMake(widthPerSecond * duration, h)
+        let contentView = previewImagesScrollViewContentView
+        contentView.frame = CGRect(origin: .zero, size: previewImagesScrollView.contentSize)
+        imageContentView.frame = contentView.bounds
+        
+        // TODO: guan
+    }
+    
+    private func updateTimeRangeViewFrame() {
+        let scrollView = previewImagesScrollView
+        let w = (endTime.seconds - startTime.seconds) * widthPerSecond
+        let x = min(scrollView.contentSize.width - w, max(0, startTime.seconds * widthPerSecond))
+        timeRangeView.frame = CGRectMake(x, 0, w, previewThumbSize.height)
+        
+        startTimeView.frame = CGRectMake(timeRangeView.frame.minX - 5 - 25, 0, 50, previewThumbSize.height)
+        endTimeView.frame = CGRectMake(timeRangeView.frame.maxX + 5 - 25, 0, 50, previewThumbSize.height)
+    }
+    
+    // MARK: Gesture Handlers
+    
+    private var centerX = 0.0
+    private var centerMinX = 0.0
+    private var centerMaxX = 0.0
+    @objc private func handleStartTimePanGesture(gesture: UIPanGestureRecognizer) {
+        let state = gesture.state
+        let contentView = previewImagesScrollViewContentView
+        let view = startTimeView
+        let translateX = gesture.translation(in: contentView).x
+        var x = view.center.x
+        var isEnded = false
+        if state == .began {
+            centerX = view.center.x
+            centerMinX = max(0, endTime.seconds - maxDuration) * widthPerSecond - 5
+            centerMaxX = (endTime.seconds - minDuration) * widthPerSecond - 5.0
+            
+            x = centerX + translateX
+            previewImagesScrollView.isUserInteractionEnabled = false
+        }
+        else if state == .changed {
+            x = centerX + translateX
+        }
+        else if state == .cancelled || state == .ended {
+            x = centerX + translateX
+            isEnded = true
+            previewImagesScrollView.isUserInteractionEnabled = true
+        }
+        x = max(min(centerMaxX, x), centerMinX)
+        if centerMinX < centerMaxX && view.center.x != x {
+            view.center = CGPointMake(x, view.center.y)
+            let time = (x + 5) / contentView.bounds.width * videoDuration
+            let timescale = max(startTime.timescale, 1000)
+            let cmtime = CMTimeMake(value: Int64(time * Double(timescale)), timescale: timescale)
+//            if playerLayer.player?.rate != 0 {
+//                playerLayer.player?.pause()
+//            }
+//            playerLayer.player?.seek(to: cmtime, toleranceBefore: .zero, toleranceAfter: .zero)
+            startTime = cmtime
+            onStartTimeChanged?(self)
+        }
+        progressIndicatorView.center = CGPointMake(startTime.seconds / videoDuration * previewImagesScrollViewContentView.bounds.width, timeRangeView.bounds.midY)
+
+        if isEnded {
+//            updateTimeRangeViewFrame()
+//            updatePlayerStartEndTime()
+//            centerTimeRangeView()
+            onStartTimeChangeEnded?(self)
+        }
+    }
+    
+    @objc private func handleEndTimePanGesture(gesture: UIPanGestureRecognizer) {
+        let state = gesture.state
+        let contentView = previewImagesScrollViewContentView
+        let view = endTimeView
+        let translateX = gesture.translation(in: contentView).x
+        var x = view.center.x
+        var isEnded = false
+        if state == .began {
+            centerX = view.center.x
+            centerMinX = (startTime.seconds + minDuration) * widthPerSecond + 5
+            centerMaxX = min(startTime.seconds + maxDuration, videoDuration) * widthPerSecond + 5.0
+            
+            x = centerX + translateX
+            previewImagesScrollView.isUserInteractionEnabled = false
+        }
+        else if state == .changed {
+            x = centerX + translateX
+        }
+        else if state == .cancelled || state == .ended {
+            x = centerX + translateX
+            isEnded = true
+            previewImagesScrollView.isUserInteractionEnabled = true
+        }
+        x = max(min(centerMaxX, x), centerMinX)
+        if centerMinX < centerMaxX && view.center.x != x {
+            view.center = CGPointMake(x, view.center.y)
+            let time = (x - 5) / contentView.bounds.width * videoDuration
+            let timescale = max(endTime.timescale, 1000)
+            let cmtime = CMTimeMake(value: Int64(time * Double(timescale)), timescale: timescale)
+//            if playerLayer.player?.rate != 0 {
+//                playerLayer.player?.pause()
+//            }
+//            playerLayer.player?.seek(to: cmtime, toleranceBefore: .zero, toleranceAfter: .zero)
+            endTime = cmtime
+            onEndTimeChanged?(self)
+        }
+        progressIndicatorView.center = CGPointMake(endTime.seconds / videoDuration * previewImagesScrollViewContentView.bounds.width, timeRangeView.bounds.midY)
+        
+        if isEnded {
+//            updateTimeRangeViewFrame()
+//            updatePlayerStartEndTime()
+//            centerTimeRangeView()
+            onEndTimeChangeEnded?(self)
+        }
+    }
+}
+
+extension ISCropTimeRangeView: UIScrollViewDelegate {
+    
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        let w = timeRangeView.bounds.width
+        guard w > 0, !ignorePreviewImagesScrollViewScroll else { return }
+        
+        let contentView = previewImagesScrollViewContentView
+        let pointInView = CGPointMake(scrollView.frame.midX - w * 0.5, 0)
+        let pointInContentView = contentView.convert(pointInView, from: self)
+        var x = min(contentView.bounds.width - w, max(0, pointInContentView.x))
+        timeRangeView.frame = CGRectMake(x, 0, w, previewThumbSize.height)
+        
+        startTimeView.frame = CGRectMake(timeRangeView.frame.minX - 5 - 25, 0, 50, previewThumbSize.height)
+        endTimeView.frame = CGRectMake(timeRangeView.frame.maxX + 5 - 25, 0, 50, previewThumbSize.height)
+        
+        x = timeRangeView.frame.minX
+        var time = x / contentView.bounds.width * videoDuration
+        let timescale = max(startTime.timescale, 1000)
+        var cmtime = CMTimeMake(value: Int64(time * Double(timescale)), timescale: timescale)
+//        if playerLayer.player?.rate != 0 {
+//            playerLayer.player?.pause()
+//        }
+//        playerLayer.player?.seek(to: cmtime, toleranceBefore: .zero, toleranceAfter: .zero)
+        startTime = cmtime
+        onStartTimeChanged?(self)
+        
+        x = timeRangeView.frame.maxX
+        time = x / contentView.bounds.width * videoDuration
+        cmtime = CMTimeMake(value: Int64(time * Double(timescale)), timescale: timescale)
+        endTime = cmtime
+        
+        progressIndicatorView.center = CGPointMake(startTime.seconds / videoDuration * previewImagesScrollViewContentView.bounds.width, timeRangeView.bounds.midY)
+    }
+    
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        if !decelerate {
+            // 完全停止后, 触发播放器更新播放范围
+            didStopScroll?(self)
+        }
+    }
+    
+    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        // 完全停止后, 触发播放器更新播放范围
+        didStopScroll?(self)
     }
     
 }
