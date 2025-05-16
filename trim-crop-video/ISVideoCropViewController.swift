@@ -410,7 +410,7 @@ class ISVideoCropViewController: UIViewController {
             if playerLayer.player?.rate != 0 {
                 playerLayer.player?.pause()
             }
-            playerLayer.player?.seek(to: cmtime)
+            playerLayer.player?.seek(to: cmtime, toleranceBefore: .zero, toleranceAfter: .zero)
             startTime = cmtime
         }
         
@@ -453,7 +453,7 @@ class ISVideoCropViewController: UIViewController {
             if playerLayer.player?.rate != 0 {
                 playerLayer.player?.pause()
             }
-            playerLayer.player?.seek(to: cmtime)
+            playerLayer.player?.seek(to: cmtime, toleranceBefore: .zero, toleranceAfter: .zero)
             endTime = cmtime
         }
         
@@ -553,7 +553,7 @@ extension ISVideoCropViewController: UIScrollViewDelegate {
             if playerLayer.player?.rate != 0 {
                 playerLayer.player?.pause()
             }
-            playerLayer.player?.seek(to: cmtime)
+            playerLayer.player?.seek(to: cmtime, toleranceBefore: .zero, toleranceAfter: .zero)
             startTime = cmtime
             
             x = timeRangeView.frame.maxX

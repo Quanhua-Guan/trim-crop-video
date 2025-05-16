@@ -135,7 +135,8 @@ class ViewController: UIViewController {
     self.playerView.layer.sublayers?.removeAll()
     self.loadCleanVideo()
       
-      let url = Bundle.main.url(forResource: "grocery-train", withExtension: "mov")!
+      //let url = Bundle.main.url(forResource: "grocery-train", withExtension: "mov")!
+      let url = Bundle.main.url(forResource: "v1", withExtension: "MOV")!
       let vc = ISVideoCropViewController(url: url, cropSize: CGSizeMake(170, 170))
       vc.modalPresentationStyle = .fullScreen
       self.present(vc, animated: true)
