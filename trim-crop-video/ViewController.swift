@@ -6,6 +6,7 @@
 
 import UIKit
 import AVKit
+import AVFoundation
 import CoreImage
 import CoreImage.CIFilterBuiltins
 
@@ -77,7 +78,7 @@ class ViewController: UIViewController {
   fileprivate func loadCleanVideo() {
     self.player = AVPlayer(url: Bundle.main.url(forResource: "grocery-train", withExtension: "mov")!)
     self.cropScaleComposition = nil
-
+      
     let playerLayer = AVPlayerLayer(player: player)
     playerLayer.frame = playerView.layer.bounds
     playerLayer.videoGravity = .resizeAspect
@@ -96,10 +97,11 @@ class ViewController: UIViewController {
     let xFactor = renderingSize.width / playerView.bounds.size.width
     let yFactor = renderingSize.height / playerView.bounds.size.height
 
-    let newX = croppingView.frame.origin.x * xFactor
-    let newW = croppingView.frame.width * xFactor
-    let newY = croppingView.frame.origin.y * yFactor
-    let newH = croppingView.frame.height * yFactor
+      let theFrame = croppingView.frame
+    let newX = theFrame.origin.x * xFactor
+    let newW = theFrame.width * xFactor
+    let newY = theFrame.origin.y * yFactor
+    let newH = theFrame.height * yFactor
     var cropRect = CGRect(x: newX, y: newY, width: newW, height: newH)
 
     let originFlipTransform = CGAffineTransform(scaleX: 1, y: -1)
@@ -119,6 +121,11 @@ class ViewController: UIViewController {
 
     self.playerView.layer.sublayers?.removeAll()
     self.loadCleanVideo()
+      
+      let url = Bundle.main.url(forResource: "grocery-train", withExtension: "mov")!
+      let vc = ISVideoCropViewController(url: url, cropSize: CGSizeMake(170, 170))
+      vc.modalPresentationStyle = .fullScreen
+      self.present(vc, animated: true)
   }
 
   @IBAction func playTapped(_ sender: UIButton) {
