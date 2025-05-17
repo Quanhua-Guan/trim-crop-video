@@ -916,7 +916,7 @@ class ISCropTimeRangeView: UIView {
         x = max(min(centerMaxX, x), centerMinX)
         if centerMinX < centerMaxX && view.center.x != x {
             view.center = CGPointMake(x, view.center.y)
-            let time = (x + 5) / contentView.bounds.width * videoDuration
+            let time = (x + 5) / contentView.bounds.width * duration
             let timescale = max(startTime.timescale, 1000)
             let cmtime = CMTimeMake(value: Int64(time * Double(timescale)), timescale: timescale)
 //            if playerLayer.player?.rate != 0 {
@@ -926,7 +926,7 @@ class ISCropTimeRangeView: UIView {
             startTime = cmtime
             onStartTimeChanged?(self)
         }
-        progressIndicatorView.center = CGPointMake(startTime.seconds / videoDuration * previewImagesScrollViewContentView.bounds.width, timeRangeView.bounds.midY)
+        progressIndicatorView.center = CGPointMake(startTime.seconds / duration * previewImagesScrollViewContentView.bounds.width, timeRangeView.bounds.midY)
 
         if isEnded {
 //            updateTimeRangeViewFrame()
@@ -946,7 +946,7 @@ class ISCropTimeRangeView: UIView {
         if state == .began {
             centerX = view.center.x
             centerMinX = (startTime.seconds + minDuration) * widthPerSecond + 5
-            centerMaxX = min(startTime.seconds + maxDuration, videoDuration) * widthPerSecond + 5.0
+            centerMaxX = min(startTime.seconds + maxDuration, duration) * widthPerSecond + 5.0
             
             x = centerX + translateX
             previewImagesScrollView.isUserInteractionEnabled = false
@@ -962,7 +962,7 @@ class ISCropTimeRangeView: UIView {
         x = max(min(centerMaxX, x), centerMinX)
         if centerMinX < centerMaxX && view.center.x != x {
             view.center = CGPointMake(x, view.center.y)
-            let time = (x - 5) / contentView.bounds.width * videoDuration
+            let time = (x - 5) / contentView.bounds.width * duration
             let timescale = max(endTime.timescale, 1000)
             let cmtime = CMTimeMake(value: Int64(time * Double(timescale)), timescale: timescale)
 //            if playerLayer.player?.rate != 0 {
@@ -972,7 +972,7 @@ class ISCropTimeRangeView: UIView {
             endTime = cmtime
             onEndTimeChanged?(self)
         }
-        progressIndicatorView.center = CGPointMake(endTime.seconds / videoDuration * previewImagesScrollViewContentView.bounds.width, timeRangeView.bounds.midY)
+        progressIndicatorView.center = CGPointMake(endTime.seconds / duration * previewImagesScrollViewContentView.bounds.width, timeRangeView.bounds.midY)
         
         if isEnded {
 //            updateTimeRangeViewFrame()
@@ -999,7 +999,7 @@ extension ISCropTimeRangeView: UIScrollViewDelegate {
         endTimeView.frame = CGRectMake(timeRangeView.frame.maxX + 5 - 25, 0, 50, previewThumbSize.height)
         
         x = timeRangeView.frame.minX
-        var time = x / contentView.bounds.width * videoDuration
+        var time = x / contentView.bounds.width * duration
         let timescale = max(startTime.timescale, 1000)
         var cmtime = CMTimeMake(value: Int64(time * Double(timescale)), timescale: timescale)
 //        if playerLayer.player?.rate != 0 {
@@ -1010,11 +1010,11 @@ extension ISCropTimeRangeView: UIScrollViewDelegate {
         onStartTimeChanged?(self)
         
         x = timeRangeView.frame.maxX
-        time = x / contentView.bounds.width * videoDuration
+        time = x / contentView.bounds.width * duration
         cmtime = CMTimeMake(value: Int64(time * Double(timescale)), timescale: timescale)
         endTime = cmtime
         
-        progressIndicatorView.center = CGPointMake(startTime.seconds / videoDuration * previewImagesScrollViewContentView.bounds.width, timeRangeView.bounds.midY)
+        progressIndicatorView.center = CGPointMake(startTime.seconds / duration * previewImagesScrollViewContentView.bounds.width, timeRangeView.bounds.midY)
     }
     
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
