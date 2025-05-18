@@ -800,7 +800,6 @@ class ISCropTimeRangeView: UIView {
         imageContentView.clipsToBounds = true
         contentView.addSubview(imageContentView)
         
-        var x = 0.0
         for image in previewImages {
             let imageView = UIImageView(image: image)
             imageView.contentMode = .scaleAspectFill
@@ -872,7 +871,30 @@ class ISCropTimeRangeView: UIView {
         contentView.frame = CGRect(origin: .zero, size: previewImagesScrollView.contentSize)
         imageContentView.frame = contentView.bounds
         
-        // TODO: guan
+        var x = 0.0
+        let imgW = previewThumbSize.width
+        let imgH = previewThumbSize.height
+        for imageView in previewImageViews {
+            imageView.frame = CGRectMake(x, 0, imgW, imgH)
+            x += imgW
+        }
+        
+        x = 0
+        let secSpacing = widthPerSecond / 10.0
+        let first = 0
+        let last = Int(duration * 10)
+        for sec in first...last {
+            let v = scaleViews[sec]
+            v.frame = CGRectMake(x - 0.5, h - 20.0, 1, 4)
+            
+            if (sec == first || abs(sec - last) < 10) && sec % 10 == 0 {
+                if let label = sec == first ? secondViews.first : secondViews.last {
+                    label.bounds = CGRectMake(0, 0, 100, 12)
+                    label.center = CGPointMake(v.center.x, v.center.y + 15.0)
+                }
+            }
+            x += secSpacing
+        }
     }
     
     private func updateTimeRangeViewFrame() {
@@ -883,6 +905,25 @@ class ISCropTimeRangeView: UIView {
         
         startTimeView.frame = CGRectMake(timeRangeView.frame.minX - 5 - 25, 0, 50, previewThumbSize.height)
         endTimeView.frame = CGRectMake(timeRangeView.frame.maxX + 5 - 25, 0, 50, previewThumbSize.height)
+    }
+    
+    private func centerTimeRangeView() {
+        ignorePreviewImagesScrollViewScroll = true
+        
+        let midX = bounds.midX
+        let timeRangeViewMidX = convert(CGPointMake(timeRangeView.bounds.midX, 0), from: timeRangeView).x
+        var offset = previewImagesScrollView.contentOffset
+        offset.x += timeRangeViewMidX - midX
+        UIView.animate(withDuration: 0.35) {
+            self.previewImagesScrollView.contentOffset = offset
+        } completion: { _ in
+            var insets = self.previewImagesScrollView.contentInset
+            let left = max(insets.left, (self.previewImagesScrollView.bounds.width - self.timeRangeView.bounds.width) * 0.5)
+            insets.left = left
+            insets.right = left
+            self.previewImagesScrollView.contentInset = insets
+            self.ignorePreviewImagesScrollViewScroll = false
+        }
     }
     
     // MARK: Gesture Handlers

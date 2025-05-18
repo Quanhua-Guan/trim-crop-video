@@ -1,0 +1,7 @@
+*~
+.DS_Store
+Breakpoints_v2.xcbkptlist
+*.xcuserstate
+*.xcworkspace
+xcuserdata
+Pods
