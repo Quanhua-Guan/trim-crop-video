@@ -1,0 +1,16 @@
+PODS:
+  - QGProgressView (0.2.0)
+
+DEPENDENCIES:
+  - QGProgressView
+
+SPEC REPOS:
+  https://github.com/CocoaPods/Specs.git:
+    - QGProgressView
+
+SPEC CHECKSUMS:
+  QGProgressView: e2066e57e4106088fd019a643d09438a81b1dc78
+
+PODFILE CHECKSUM: 2e6a96c91c1fcaa08cc9499f20a60559f606d083
+
+COCOAPODS: 1.14.3

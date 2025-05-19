@@ -9,6 +9,7 @@ import AVKit
 import AVFoundation
 import CoreImage
 import CoreImage.CIFilterBuiltins
+import SwiftUI
 
 class ViewController: UIViewController {
 
@@ -139,6 +140,9 @@ class ViewController: UIViewController {
       let url = Bundle.main.url(forResource: "v1", withExtension: "MOV")!
       let vc = ISVideoCropViewController(url: url, cropSize: CGSizeMake(170, 170))
       vc.modalPresentationStyle = .fullScreen
+      vc.cropDidFinished = { outputURL in
+          NotificationCenter.default.post(name: NSNotification.Name("CropDone"), object: outputURL)
+      }
       self.present(vc, animated: true)
   }
 
@@ -279,3 +283,28 @@ class ViewController: UIViewController {
   }
 }
 
+extension UIColor {
+    static let bgOpacColor = UIColor(red: 0, green: 0, blue: 0, alpha: 0.07)
+    static let bgShadowColor = UIColor(red: 0, green: 0, blue: 0, alpha: 0.33)
+    static let bglightShadowColor = UIColor(red: 0.29, green: 0.29, blue: 0.29, alpha: 0.1)
+    
+    static let titleColor = UIColor(red: 41/255.0, green: 41/255.0, blue: 41/255.0, alpha: 1.0)
+    
+    static let titleGrayColor = UIColor(red: 115/255.0, green: 115/255.0, blue: 115/255.0, alpha: 1.0)
+    
+    static let placeHolderColor = UIColor(red: 158/255.0, green: 158/255.0, blue: 158/255.0, alpha: 1.0)
+    static let tinctBlue = UIColor(red: 0/255.0, green: 140/255.0, blue: 255/255.0, alpha: 1.0)
+    static let tinctGreen = UIColor(red: 52/255.0, green: 199/255.0, blue: 89/255.0, alpha: 1.0)
+    static let tinctOrange = UIColor(red: 255/255.0, green: 130/255.0, blue: 43/255.0, alpha: 1.0)
+    
+    static let bgViewColor = UIColor(red: 242/255.0, green: 242/255.0, blue: 242/255.0, alpha: 1.0)
+    static let selectBGColor = UIColor(red: 220/255.0, green: 220/255.0, blue: 220/255.0, alpha: 1.0)
+    static let whiteBGColor = UIColor(red: 247/255.0, green: 247/255.0, blue: 247/255.0, alpha: 1.0)
+    
+    static let tinctBgColor = UIColor(red: 33/255.0, green: 35/255.0, blue: 63/255.0, alpha: 1.0)
+    
+    static let oldBgColor = UIColor(red: 245/255.0, green: 248/255.0, blue: 250/255.0, alpha: 1.0)
+    static let bgColor = UIColor(red: 245/255.0, green: 248/255.0, blue: 250/255.0, alpha: 1.0)
+    static let yzdBlue = UIColor(red: 0/255.0, green: 140/255.0, blue: 255/255.0, alpha: 1.0)
+    
+}
