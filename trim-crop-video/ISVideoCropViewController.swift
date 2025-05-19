@@ -15,7 +15,7 @@ class ISVideoCropViewController: UIViewController {
     var minDuration: Double = 0.5 // 最小选择时长, 单位: s
     var maxDuration: Double = 6.0 // 最大选择时长, 单位: s
     
-    var cropTimeRangeView: ISCropTimeRangeView?
+    var cropTimeRangeView: ISTimeRangeSelectView?
     
     private var widthPerSecond: Double = 129.0 // 底部图片预览进图视图, 每秒对应宽度, 单位: pt
     private var fps: Double = 1.0
@@ -84,7 +84,7 @@ class ISVideoCropViewController: UIViewController {
                 if player.rate == 0 {
                     self.periodicTimeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 60), queue: .main) { [weak self] _ in
                         if let self, let player = self.playerLayer.player {
-                            let currentTime = player.currentTime()
+                            let currentTime = player.currentTime().seconds
                             self.cropTimeRangeView?.updateProgressIndicator(time: currentTime)
                         }
                     }
@@ -130,23 +130,25 @@ class ISVideoCropViewController: UIViewController {
         // 预览小图宽高 previewThumbSize
         // 计算每秒取预览图帧数 = withPerSecond / 30.0
         //fps = max(1.0, widthPerSecond / previewThumbSize.width)
-        fps = ISCropTimeRangeView.calcFps(displayWidth: w, maxDuration: self.maxDuration)
+        fps = ISTimeRangeSelectView.calcFps(displayWidth: w, maxDuration: self.maxDuration)
         
         getVideoPreviewImages(asset: AVURLAsset(url: url)) { [weak self] images in
             guard let self else { return }
             
-            let fps = ISCropTimeRangeView.calcFps(displayWidth: w, maxDuration: self.maxDuration)
-            let cropTimeRangeView = ISCropTimeRangeView(duration: videoDuration, previewImages: images, fps: fps)
+            let fps = ISTimeRangeSelectView.calcFps(displayWidth: w, maxDuration: self.maxDuration)
+            let cropTimeRangeView = ISTimeRangeSelectView(duration: videoDuration, previewImages: images, fps: fps)
             cropTimeRangeView.didStopScroll = { [weak self] v in
                 // 完全停止后, 触发播放器更新播放范围
                 self?.updatePlayerStartEndTime()
             }
             cropTimeRangeView.onStartTimeChanged = { [weak self] v in
-                if let player = self?.playerLayer.player {
+                if let self, let player = self.playerLayer.player {
                     if player.rate != 0 {
                         player.pause()
                     }
-                    player.seek(to: v.startTime, toleranceBefore: .zero, toleranceAfter: .zero)
+                    let timescale: Int32 = 1000
+                    let time = CMTimeMake(value: Int64(v.startTime * Double(timescale)), timescale: timescale)
+                    player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
                 }
             }
             cropTimeRangeView.onEndTimeChanged = { [weak self] v in
@@ -154,7 +156,9 @@ class ISVideoCropViewController: UIViewController {
                     if player.rate != 0 {
                         player.pause()
                     }
-                    player.seek(to: v.endTime, toleranceBefore: .zero, toleranceAfter: .zero)
+                    let timescale: Int32 = 1000
+                    let time = CMTimeMake(value: Int64(v.endTime * Double(timescale)), timescale: timescale)
+                    player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
                 }
             }
             cropTimeRangeView.onStartTimeChangeEnded = { [weak self] v in
@@ -472,13 +476,13 @@ class ISCropAreaView: UIView {
     
 }
 
-class ISCropTimeRangeView: UIView {
+class ISTimeRangeSelectView: UIView {
     
-    var didStopScroll: ((ISCropTimeRangeView) -> Void)?
-    var onStartTimeChanged: ((ISCropTimeRangeView) -> Void)?
-    var onStartTimeChangeEnded: ((ISCropTimeRangeView) -> Void)?
-    var onEndTimeChanged: ((ISCropTimeRangeView) -> Void)?
-    var onEndTimeChangeEnded: ((ISCropTimeRangeView) -> Void)?
+    var didStopScroll: ((ISTimeRangeSelectView) -> Void)?
+    var onStartTimeChanged: ((ISTimeRangeSelectView) -> Void)?
+    var onStartTimeChangeEnded: ((ISTimeRangeSelectView) -> Void)?
+    var onEndTimeChanged: ((ISTimeRangeSelectView) -> Void)?
+    var onEndTimeChangeEnded: ((ISTimeRangeSelectView) -> Void)?
     
     let duration: Double // 时长, 单位: s
     let previewImages: [UIImage]
@@ -486,8 +490,8 @@ class ISCropTimeRangeView: UIView {
     private var scaleViews: [UIView] = [] // 刻度视图
     private var secondViews: [UIView] = [] // 刻度秒数
     
-    var startTime: CMTime = .zero
-    var endTime: CMTime = .zero
+    var startTime: Double = 0
+    var endTime: Double = 0
     
     var minDuration: Double = 0.5 // 最小选择时长, 单位: s
     var maxDuration: Double = 6.0 // 最大选择时长, 单位: s
@@ -558,7 +562,7 @@ class ISCropTimeRangeView: UIView {
         maxDuration = min(6.0, duration)
         
         // 默认结束时间
-        endTime = CMTimeMake(value: Int64(maxDuration * 1000), timescale: 1000)
+        endTime = maxDuration
         
         previewImagesScrollView.showsVerticalScrollIndicator = false
         previewImagesScrollView.showsHorizontalScrollIndicator = false
@@ -609,8 +613,8 @@ class ISCropTimeRangeView: UIView {
         return fps
     }
     
-    func updateProgressIndicator(time: CMTime) {
-        progressIndicatorView.center = CGPointMake(time.seconds / duration * previewImagesScrollViewContentView.bounds.width, timeRangeView.bounds.midY)
+    func updateProgressIndicator(time: Double) {
+        progressIndicatorView.center = CGPointMake(time / duration * previewImagesScrollViewContentView.bounds.width, timeRangeView.bounds.midY)
     }
     
     // MARK: Layout
@@ -674,8 +678,8 @@ class ISCropTimeRangeView: UIView {
     
     private func updateTimeRangeViewFrame() {
         let scrollView = previewImagesScrollView
-        let w = (endTime.seconds - startTime.seconds) * widthPerSecond
-        let x = min(scrollView.contentSize.width - w, max(0, startTime.seconds * widthPerSecond))
+        let w = (endTime - startTime) * widthPerSecond
+        let x = min(scrollView.contentSize.width - w, max(0, startTime * widthPerSecond))
         timeRangeView.frame = CGRectMake(x, 0, w, previewThumbSize.height)
         
         startTimeView.frame = CGRectMake(timeRangeView.frame.minX - 5 - 25, 0, 50, previewThumbSize.height)
@@ -715,8 +719,8 @@ class ISCropTimeRangeView: UIView {
         var isEnded = false
         if state == .began {
             centerX = view.center.x
-            centerMinX = max(0, endTime.seconds - maxDuration) * widthPerSecond - 5
-            centerMaxX = (endTime.seconds - minDuration) * widthPerSecond - 5.0
+            centerMinX = max(0, endTime - maxDuration) * widthPerSecond - 5
+            centerMaxX = (endTime - minDuration) * widthPerSecond - 5.0
             
             x = centerX + translateX
             previewImagesScrollView.isUserInteractionEnabled = false
@@ -732,21 +736,13 @@ class ISCropTimeRangeView: UIView {
         x = max(min(centerMaxX, x), centerMinX)
         if centerMinX < centerMaxX && view.center.x != x {
             view.center = CGPointMake(x, view.center.y)
-            let time = (x + 5) / contentView.bounds.width * duration
-            let timescale = max(startTime.timescale, 1000)
-            let cmtime = CMTimeMake(value: Int64(time * Double(timescale)), timescale: timescale)
-//            if playerLayer.player?.rate != 0 {
-//                playerLayer.player?.pause()
-//            }
-//            playerLayer.player?.seek(to: cmtime, toleranceBefore: .zero, toleranceAfter: .zero)
-            startTime = cmtime
+            startTime = (x + 5) / contentView.bounds.width * duration
             onStartTimeChanged?(self)
         }
         updateProgressIndicator(time: startTime)
 
         if isEnded {
             updateTimeRangeViewFrame()
-//            updatePlayerStartEndTime()
             centerTimeRangeView()
             onStartTimeChangeEnded?(self)
         }
@@ -761,8 +757,8 @@ class ISCropTimeRangeView: UIView {
         var isEnded = false
         if state == .began {
             centerX = view.center.x
-            centerMinX = (startTime.seconds + minDuration) * widthPerSecond + 5
-            centerMaxX = min(startTime.seconds + maxDuration, duration) * widthPerSecond + 5.0
+            centerMinX = (startTime + minDuration) * widthPerSecond + 5
+            centerMaxX = min(startTime + maxDuration, duration) * widthPerSecond + 5.0
             
             x = centerX + translateX
             previewImagesScrollView.isUserInteractionEnabled = false
@@ -778,28 +774,20 @@ class ISCropTimeRangeView: UIView {
         x = max(min(centerMaxX, x), centerMinX)
         if centerMinX < centerMaxX && view.center.x != x {
             view.center = CGPointMake(x, view.center.y)
-            let time = (x - 5) / contentView.bounds.width * duration
-            let timescale = max(endTime.timescale, 1000)
-            let cmtime = CMTimeMake(value: Int64(time * Double(timescale)), timescale: timescale)
-//            if playerLayer.player?.rate != 0 {
-//                playerLayer.player?.pause()
-//            }
-//            playerLayer.player?.seek(to: cmtime, toleranceBefore: .zero, toleranceAfter: .zero)
-            endTime = cmtime
+            endTime = (x - 5) / contentView.bounds.width * duration
             onEndTimeChanged?(self)
         }
         updateProgressIndicator(time: endTime)
         
         if isEnded {
             updateTimeRangeViewFrame()
-//            updatePlayerStartEndTime()
             centerTimeRangeView()
             onEndTimeChangeEnded?(self)
         }
     }
 }
 
-extension ISCropTimeRangeView: UIScrollViewDelegate {
+extension ISTimeRangeSelectView: UIScrollViewDelegate {
     
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         let w = timeRangeView.bounds.width
@@ -815,20 +803,11 @@ extension ISCropTimeRangeView: UIScrollViewDelegate {
         endTimeView.frame = CGRectMake(timeRangeView.frame.maxX + 5 - 25, 0, 50, previewThumbSize.height)
         
         x = timeRangeView.frame.minX
-        var time = x / contentView.bounds.width * duration
-        let timescale = max(startTime.timescale, 1000)
-        var cmtime = CMTimeMake(value: Int64(time * Double(timescale)), timescale: timescale)
-//        if playerLayer.player?.rate != 0 {
-//            playerLayer.player?.pause()
-//        }
-//        playerLayer.player?.seek(to: cmtime, toleranceBefore: .zero, toleranceAfter: .zero)
-        startTime = cmtime
+        startTime = x / contentView.bounds.width * duration
         onStartTimeChanged?(self)
         
         x = timeRangeView.frame.maxX
-        time = x / contentView.bounds.width * duration
-        cmtime = CMTimeMake(value: Int64(time * Double(timescale)), timescale: timescale)
-        endTime = cmtime
+        endTime = x / contentView.bounds.width * duration
         
         updateProgressIndicator(time: startTime)
     }
