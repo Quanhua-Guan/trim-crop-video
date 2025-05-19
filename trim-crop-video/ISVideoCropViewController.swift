@@ -8,37 +8,47 @@
 import UIKit
 import AVFoundation
 
-class ISVideoCropViewController: UIViewController {
-
-    var url: URL
-    var cropSize: CGSize
-    var minDuration: Double = 0.5 // 最小选择时长, 单位: s
-    var maxDuration: Double = 6.0 // 最大选择时长, 单位: s
+class ISVideoCropViewController: YZDBaseVC {
     
-    var cropTimeRangeView: ISTimeRangeSelectView?
+    let asset: AVAsset
+    let cropSize: CGSize
+    var player: AVPlayer
     
-    private var widthPerSecond: Double = 129.0 // 底部图片预览进图视图, 每秒对应宽度, 单位: pt
-    private var fps: Double = 1.0
-    private let previewThumbSize: CGSize = CGSizeMake(30, 40)
+    var timeRangeView: ISTimeRangeSelectView?
+    var videoPreviewView: ISVideoCropPreviewView
     
-    private var videoContainerScrollView = UIScrollView()
-    private var (maskView, maskLayer) = (UIView(), CAShapeLayer())
-    private var cropAreaView = ISCropAreaView()
-    private var (videoPreviewView, playerLayer, playButton) = (UIView(), AVPlayerLayer(), UIButton(type: .custom))
+    private var playButton = UIButton(type: .custom)
     
     private var videoSize: CGSize = .zero
-    private var videoDuration: Double = 0
     
-    private var startTime: CMTime = .zero
-    private var endTime: CMTime = .zero
+    private var startTime: CMTime {
+        let ts = Int32(1000)
+        return CMTimeMake(value: Int64((timeRangeView?.startTime ?? 0.0) * Double(ts)), timescale: ts)
+    }
+    
+    private var endTime: CMTime {
+        let ts = Int32(1000)
+        return CMTimeMake(value: Int64((timeRangeView?.endTime ?? 0.0) * Double(ts)), timescale: ts)
+    }
+    
     private var endTimeObserver: Any?
     private var periodicTimeObserver: Any?
     
     private var cropButton: UIButton = UIButton(type: .custom)
     
-    init(url: URL, cropSize: CGSize) {
-        self.url = url
+    init(asset: AVAsset, cropSize: CGSize) {
+        self.asset = asset
         self.cropSize = cropSize
+        self.player = AVPlayer(playerItem: AVPlayerItem(asset: asset))
+        self.videoPreviewView = ISVideoCropPreviewView(player: player, cropSize: cropSize)
+        super.init(nibName: nil, bundle: nil)
+    }
+    
+    init(url: URL, cropSize: CGSize) {
+        self.asset = AVURLAsset(url: url)
+        self.cropSize = cropSize
+        self.player = AVPlayer(playerItem: AVPlayerItem(asset: asset))
+        self.videoPreviewView = ISVideoCropPreviewView(player: player, cropSize: cropSize)
         super.init(nibName: nil, bundle: nil)
     }
     
@@ -55,12 +65,8 @@ class ISVideoCropViewController: UIViewController {
     func setup() {
         view.backgroundColor = .black
         
-        // 430x510
-        view.addSubview(videoContainerScrollView)
-        videoContainerScrollView.addSubview(videoPreviewView)
-        maskView.layer.addSublayer(maskLayer)
-        view.addSubview(maskView)
-        view.addSubview(cropAreaView)
+        view.addSubview(videoPreviewView)
+        
         view.addSubview(playButton)
         
         cropButton.setTitle("裁剪", for: .normal)
@@ -69,80 +75,46 @@ class ISVideoCropViewController: UIViewController {
         }), for: .touchUpInside)
         view.addSubview(cropButton)
         
-        videoContainerScrollView.delegate = self
-        videoContainerScrollView.showsHorizontalScrollIndicator = false
-        videoContainerScrollView.showsVerticalScrollIndicator = false
-        maskView.isUserInteractionEnabled = false
-        cropAreaView.isUserInteractionEnabled = false
         playButton.setImage(UIImage(named: "diyLivePhotoPlay"), for: .normal)
         playButton.addAction(.init(handler: { [weak self] _ in
-            if let self, let player = self.playerLayer.player {
-                if let observer = self.periodicTimeObserver {
-                    player.removeTimeObserver(observer)
-                    self.periodicTimeObserver = nil
+            guard let self else { return }
+            
+            let player = self.player
+            if let observer = self.periodicTimeObserver {
+                player.removeTimeObserver(observer)
+                self.periodicTimeObserver = nil
+            }
+            if player.rate == 0 { // 暂停状态 rate == 0
+                self.periodicTimeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 60), queue: .main) { [weak self] _ in
+                    guard let self else { return }
+                    let currentTime = self.player.currentTime().seconds
+                    self.timeRangeView?.updateProgressIndicator(time: currentTime)
                 }
-                if player.rate == 0 {
-                    self.periodicTimeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 60), queue: .main) { [weak self] _ in
-                        if let self, let player = self.playerLayer.player {
-                            let currentTime = player.currentTime().seconds
-                            self.cropTimeRangeView?.updateProgressIndicator(time: currentTime)
-                        }
-                    }
-                    if abs(player.currentTime().seconds - self.endTime.seconds) < 0.01 {
-                        player.seek(to: self.startTime, toleranceBefore: .zero, toleranceAfter: .zero)
-                    }
-                    player.play()
-                } else {
-                    player.pause()
+                if abs(player.currentTime().seconds - self.endTime.seconds) < 0.01 {
+                    player.seek(to: self.startTime, toleranceBefore: .zero, toleranceAfter: .zero)
                 }
+                player.play()
+            } else {
+                player.pause()
             }
         }), for: .touchUpInside)
         
-        videoPreviewView.layer.addSublayer(playerLayer)
-        let player = AVPlayer(url: url)
-        playerLayer.player = player
-        playerLayer.videoGravity = .resizeAspect
-        
-        let asset = AVURLAsset(url: url)
-        if let track = asset.tracks(withMediaType: .video).first {
-            videoSize = track.naturalSize.applying(track.preferredTransform)
-            videoSize = CGSizeMake(abs(videoSize.width), abs(videoSize.height))
-        } else {
-            assert(false)
-            videoSize = CGSizeMake(512, 512)
-        }
-        endTime = CMTimeMake(value: Int64(maxDuration * Double(asset.duration.timescale)), timescale: asset.duration.timescale)
-        updatePlayerStartEndTime()
-        
-        player.volume = 0
-        player.pause()
-        
         let videoDuration = CMTimeGetSeconds(asset.duration)
-        self.videoDuration = videoDuration
-        // 最小选择时长 min(0.5, 视频时长)
-        // 最大选择时长 min(6.0, 视频时长)
-        minDuration = min(0.5, videoDuration)
-        maxDuration = min(6.0, videoDuration)
-        // 取屏展示宽度 w
-        let w = getVideoContainerScrollViewFrame().width
-        // w - 40 * 2 -> 对应视频最大选择时长
-        widthPerSecond = (w - 40 * 2.0) / maxDuration
-        // 预览小图宽高 previewThumbSize
-        // 计算每秒取预览图帧数 = withPerSecond / 30.0
-        //fps = max(1.0, widthPerSecond / previewThumbSize.width)
-        fps = ISTimeRangeSelectView.calcFps(displayWidth: w, maxDuration: self.maxDuration)
-        
-        getVideoPreviewImages(asset: AVURLAsset(url: url)) { [weak self] images in
+        let maxDuration = min(6.0, videoDuration)
+        let w = getVideoPreviewViewFrame().width // 预览视图展示宽度 w
+        let fps = ISTimeRangeSelectView.calcFps(displayWidth: w, maxDuration: maxDuration)
+        getVideoPreviewImages(fps: fps) { [weak self] images in
             guard let self else { return }
             
-            let fps = ISTimeRangeSelectView.calcFps(displayWidth: w, maxDuration: self.maxDuration)
             let cropTimeRangeView = ISTimeRangeSelectView(duration: videoDuration, previewImages: images, fps: fps)
             cropTimeRangeView.didStopScroll = { [weak self] v in
                 // 完全停止后, 触发播放器更新播放范围
-                self?.updatePlayerStartEndTime()
+                guard let startTime = self?.startTime, let endTime = self?.endTime else { return }
+                self?.videoPreviewView.updatePlayerStartEndTime(startTime: startTime, endTime: endTime)
             }
             cropTimeRangeView.onStartTimeChanged = { [weak self] v in
-                if let self, let player = self.playerLayer.player {
+                if let self {
+                    let player = self.player
                     if player.rate != 0 {
                         player.pause()
                     }
@@ -152,7 +124,7 @@ class ISVideoCropViewController: UIViewController {
                 }
             }
             cropTimeRangeView.onEndTimeChanged = { [weak self] v in
-                if let player = self?.playerLayer.player {
+                if let player = self?.player {
                     if player.rate != 0 {
                         player.pause()
                     }
@@ -162,18 +134,20 @@ class ISVideoCropViewController: UIViewController {
                 }
             }
             cropTimeRangeView.onStartTimeChangeEnded = { [weak self] v in
-                self?.updatePlayerStartEndTime()
+                guard let startTime = self?.startTime, let endTime = self?.endTime else { return }
+                self?.videoPreviewView.updatePlayerStartEndTime(startTime: startTime, endTime: endTime)
             }
             cropTimeRangeView.onEndTimeChangeEnded = { [weak self] v in
-                self?.updatePlayerStartEndTime()
+                guard let startTime = self?.startTime, let endTime = self?.endTime else { return }
+                self?.videoPreviewView.updatePlayerStartEndTime(startTime: startTime, endTime: endTime)
             }
-            self.cropTimeRangeView = cropTimeRangeView
+            self.timeRangeView = cropTimeRangeView
             self.view.addSubview(cropTimeRangeView)
             self.view.setNeedsLayout()
         }
     }
     
-    private func getVideoPreviewImages(asset: AVURLAsset, complete: (([UIImage]) -> Void)?) {
+    private func getVideoPreviewImages(fps: Double, complete: (([UIImage]) -> Void)?) {
         let duration = CMTimeGetSeconds(asset.duration)
         
         var times = [NSValue]()
@@ -185,8 +159,7 @@ class ISVideoCropViewController: UIViewController {
             times.append(NSValue(time: t))
         }
         // 补充最后一帧
-        if let lastTime = times.last?.timeValue,
-           CMTimeGetSeconds(lastTime) < duration {
+        if let lastTime = times.last?.timeValue, CMTimeGetSeconds(lastTime) < duration {
             let value = Int64(duration * Double(timescale))
             times.append(NSValue(time: CMTimeMake(value: value, timescale: timescale)))
         }
@@ -200,6 +173,7 @@ class ISVideoCropViewController: UIViewController {
         let getTimeKey: (CMTime) -> String = { time in
             return "\(Int(time.value))-\(Int(time.timescale))"
         }
+        let previewThumbSize = CGSizeMake(30, 40)
         let rect = CGRectMake(0, 0, previewThumbSize.width * screenScale, previewThumbSize.height * screenScale)
         let timesCount = times.count
         let timeValues = times.map({ $0.timeValue })
@@ -243,83 +217,36 @@ class ISVideoCropViewController: UIViewController {
         }
     }
     
-    private func updatePlayerStartEndTime() {
-        guard let player = playerLayer.player else { return }
-        
-        if let observer = endTimeObserver {
-            player.removeTimeObserver(observer)
-            endTimeObserver = nil
-        }
-        endTimeObserver = player.addBoundaryTimeObserver(forTimes: [NSValue(time: endTime)], queue: .main, using: { [weak self] in
-            guard let self, let player = self.playerLayer.player else { return }
-            player.seek(to: startTime, toleranceBefore: .zero, toleranceAfter: .zero)
-            player.play()
-        })
-    }
-    
     // MARK: Layout
     
-    private func getVideoContainerScrollViewFrame() -> CGRect {
-        let w = view.bounds.width
-        let l = min(UIDevice.current.userInterfaceIdiom == .pad ? 430.0 : w, 430.0)
-        return CGRectMake((w - l) / 2.0, 100, l, l / 430.0 * 510.0)
+    private func getVideoPreviewViewFrame() -> CGRect {
+        let w = view.bounds.width, h = view.bounds.height
+        var l = w
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            l = (600.0 / 843.0) * min(w, h)
+        }
+        return CGRectMake((w - l) / 2.0, 100, l, l)
     }
     
     override func viewWillLayoutSubviews() {
         super.viewWillLayoutSubviews()
         
-        videoContainerScrollView.frame = getVideoContainerScrollViewFrame()
-        maskView.frame = videoContainerScrollView.frame
-        maskLayer.frame = maskView.bounds
-        
-        let oldFrame = cropAreaView.frame
-        let f = videoContainerScrollView.frame.inset(by: UIEdgeInsets(top: 20, left: 20, bottom: 20, right: 20))
-        cropAreaView.frame = AVMakeRect(aspectRatio: cropSize, insideRect: f)
-        
-        if oldFrame != cropAreaView.frame {
-            let path = UIBezierPath()
-            path.append(.init(rect: maskView.bounds))
-            path.append(.init(rect: maskView.convert(cropAreaView.bounds, from: cropAreaView)))
-            maskLayer.path = path.cgPath
-            maskLayer.fillRule = .evenOdd
-            maskLayer.fillColor = UIColor.black.cgColor
-        }
-        
-        var newSize = ISMakeRectAspectFill(aspectRatio: videoSize, insideRect: videoContainerScrollView.bounds).size
-        newSize = CGSizeMake(floor(newSize.width), floor(newSize.height))
-        let newBounds = CGRect(origin: .zero, size: newSize)
-        if videoPreviewView.bounds != newBounds {
-            videoPreviewView.bounds = newBounds
-            playerLayer.frame = newBounds
-            videoContainerScrollView.contentSize = videoPreviewView.bounds.size
-            let minZoomScale = max(cropAreaView.bounds.width / newBounds.width, cropAreaView.bounds.height / newBounds.height)
-            videoContainerScrollView.zoomScale = minZoomScale
-            videoContainerScrollView.minimumZoomScale = minZoomScale
-            videoContainerScrollView.maximumZoomScale = max(ceil(minZoomScale + 1), 5.0)
-            
-            let frame: CGRect = maskView.convert(cropAreaView.bounds, from: cropAreaView)
-            videoContainerScrollView.contentInset = UIEdgeInsets(top: frame.minY, left: frame.minX, bottom: frame.minY, right: frame.minX)
-            videoPreviewView.center = CGPointMake(videoPreviewView.bounds.midX, videoPreviewView.bounds.midY)
-        }
+        videoPreviewView.frame = getVideoPreviewViewFrame()
         
         playButton.bounds = CGRectMake(0, 0, 100, 100)
-        playButton.center = CGPointMake(maskView.frame.midX, maskView.frame.maxY + playButton.bounds.height * 0.5)
+        playButton.center = CGPointMake(videoPreviewView.frame.midX, videoPreviewView.frame.maxY + playButton.bounds.height * 0.5)
         
-        cropTimeRangeView?.bounds = CGRectMake(0, 0, maskView.frame.width, 105)
-        cropTimeRangeView?.center = CGPointMake(view.bounds.midX, playButton.frame.maxY + 105 * 0.5)
+        timeRangeView?.bounds = CGRectMake(0, 0, videoPreviewView.frame.width, 105)
+        timeRangeView?.center = CGPointMake(view.bounds.midX, playButton.frame.maxY + 105 * 0.5)
         
         cropButton.bounds = CGRectMake(0, 0, 100, 50)
-        cropButton.center = CGPointMake(view.bounds.midX, playButton.frame.maxY + (cropTimeRangeView?.bounds.height ?? 105) + 10 + 50 * 0.5)
-    }
-    
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
+        cropButton.center = CGPointMake(view.bounds.midX, playButton.frame.maxY + (timeRangeView?.bounds.height ?? 105) + 10 + 50 * 0.5)
     }
     
     // MARK: Crop
     
     private func crop() {
-        var cropRect = cropAreaView.convert(cropAreaView.bounds, to: videoPreviewView)
+        var cropRect = self.videoPreviewView.cropRect
         cropRect.origin = CGPointMake(
             cropRect.minX / videoPreviewView.bounds.width * videoSize.width,
             cropRect.minY / videoPreviewView.bounds.height * videoSize.height
@@ -333,7 +260,6 @@ class ISVideoCropViewController: UIViewController {
         cropRect = cropRect.applying(originFlipTransform)
         cropRect = cropRect.applying(frameTranslateTransform)
         
-        let asset = AVURLAsset(url: url)
         let cropScaleComposition = AVMutableVideoComposition(asset: asset) { request in
             guard let cropFilter = CIFilter(name: "CICrop") else {
                 request.finish(with: request.sourceImage, context: nil)
@@ -375,47 +301,145 @@ class ISVideoCropViewController: UIViewController {
     }
 }
 
-extension ISVideoCropViewController: UIScrollViewDelegate {
+class ISVideoCropPreviewView: UIView, UIScrollViewDelegate {
+    
+    private var player: AVPlayer
+    private var videoSize: CGSize = .zero
+    private var cropSize: CGSize
+    
+    private var videoContainerScrollView = UIScrollView()
+    private var (videoMaskView, videoMaskLayer) = (UIView(), CAShapeLayer())
+    private var cropAreaView = ISCropAreaView()
+    private var (videoPreviewView, playerLayer, playButton) = (UIView(), AVPlayerLayer(), UIButton(type: .custom))
+    
+    private var endTimeObserver: Any?
+    private var periodicTimeObserver: Any?
+    
+    var cropRect: CGRect {
+        cropAreaView.convert(cropAreaView.bounds, to: videoPreviewView)
+    }
+    
+    init(player: AVPlayer, cropSize: CGSize) {
+        self.player = player
+        self.cropSize = cropSize
+        super.init(frame: .zero)
+        setup()
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("no imp: ISVideoCropPreviewView")
+    }
+    
+    private func setup() {
+        addSubview(videoContainerScrollView)
+        videoContainerScrollView.addSubview(videoPreviewView)
+        videoMaskView.layer.addSublayer(videoMaskLayer)
+        addSubview(videoMaskView)
+        addSubview(cropAreaView)
+        
+        videoContainerScrollView.delegate = self
+        videoContainerScrollView.showsHorizontalScrollIndicator = false
+        videoContainerScrollView.showsVerticalScrollIndicator = false
+        videoMaskView.isUserInteractionEnabled = false
+        cropAreaView.isUserInteractionEnabled = false
+        
+        videoPreviewView.layer.addSublayer(playerLayer)
+        playerLayer.player = player
+        playerLayer.videoGravity = .resizeAspect
+        
+        if let track = player.currentItem?.asset.tracks(withMediaType: .video).first {
+            let size = track.naturalSize.applying(track.preferredTransform)
+            videoSize = CGSizeMake(abs(size.width), abs(size.height))
+        } else {
+            assert(false)
+            videoSize = CGSizeMake(512, 512)
+        }
+        
+        player.volume = 0
+        player.pause()
+    }
+    
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        
+        videoContainerScrollView.frame = bounds
+        videoMaskView.frame = videoContainerScrollView.frame
+        videoMaskLayer.frame = videoMaskView.bounds
+        
+        let oldFrame = cropAreaView.frame
+        let tempFrame = videoContainerScrollView.frame.inset(by: UIEdgeInsets(top: 20, left: 20, bottom: 20, right: 20))
+        cropAreaView.frame = AVMakeRect(aspectRatio: cropSize, insideRect: tempFrame)
+        
+        if oldFrame != cropAreaView.frame {
+            let path = UIBezierPath()
+            path.append(.init(rect: videoMaskView.bounds))
+            path.append(.init(rect: videoMaskView.convert(cropAreaView.bounds, from: cropAreaView)))
+            videoMaskLayer.path = path.cgPath
+            videoMaskLayer.fillRule = .evenOdd
+            videoMaskLayer.fillColor = UIColor.black.cgColor
+        }
+        
+        var newSize = ISMakeRectAspectFill(aspectRatio: videoSize, insideRect: videoContainerScrollView.bounds).size
+        newSize = CGSizeMake(floor(newSize.width), floor(newSize.height))
+        let newBounds = CGRect(origin: .zero, size: newSize)
+        if videoPreviewView.bounds != newBounds {
+            videoPreviewView.bounds = newBounds
+            playerLayer.frame = newBounds
+            videoContainerScrollView.contentSize = videoPreviewView.bounds.size
+            let minZoomScale = max(cropAreaView.bounds.width / newBounds.width, cropAreaView.bounds.height / newBounds.height)
+            videoContainerScrollView.zoomScale = minZoomScale
+            videoContainerScrollView.minimumZoomScale = minZoomScale
+            videoContainerScrollView.maximumZoomScale = max(ceil(minZoomScale + 1), 5.0)
+            
+            let frame: CGRect = videoMaskView.convert(cropAreaView.bounds, from: cropAreaView)
+            videoContainerScrollView.contentInset = UIEdgeInsets(top: frame.minY, left: frame.minX, bottom: frame.minY, right: frame.minX)
+            videoPreviewView.center = CGPointMake(videoPreviewView.bounds.midX, videoPreviewView.bounds.midY)
+        }
+    }
+    
+    func updatePlayerStartEndTime(startTime: CMTime, endTime: CMTime) {
+        if let observer = endTimeObserver {
+            player.removeTimeObserver(observer)
+            endTimeObserver = nil
+        }
+        endTimeObserver = player.addBoundaryTimeObserver(forTimes: [NSValue(time: endTime)], queue: .main, using: { [weak self] in
+            guard let self else { return }
+            
+            let player = self.player
+            player.seek(to: startTime, toleranceBefore: .zero, toleranceAfter: .zero)
+            player.play()
+        })
+    }
+    
+    // MARK: UIScrollViewDelegate
     
     func viewForZooming(in scrollView: UIScrollView) -> UIView? {
-        if scrollView == videoContainerScrollView {
-            return videoPreviewView
-        }
-        return nil
+        return videoPreviewView
     }
     
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
-        if scrollView == videoContainerScrollView {
-            UIView.animate(withDuration: 0.3) {
-                self.maskView.alpha = 0.75
-            }
+        UIView.animate(withDuration: 0.3) {
+            self.videoMaskView.alpha = 0.75
         }
     }
     
     func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) {
-        if scrollView == videoContainerScrollView {
-            UIView.animate(withDuration: 0.3) {
-                self.maskView.alpha = 0.75
-            }
+        UIView.animate(withDuration: 0.3) {
+            self.videoMaskView.alpha = 0.75
         }
     }
     
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
-        if scrollView == videoContainerScrollView {
-            UIView.animate(withDuration: 0.3, delay: 0.35) {
-                self.maskView.alpha = 1.0
-            }
+        UIView.animate(withDuration: 0.3, delay: 0.35) {
+            self.videoMaskView.alpha = 1.0
         }
     }
     
     func scrollViewDidEndZooming(_ scrollView: UIScrollView, with view: UIView?, atScale scale: CGFloat) {
-        if scrollView == videoContainerScrollView {
-            UIView.animate(withDuration: 0.3, delay: 0.35) {
-                self.maskView.alpha = 1.0
-            }
+        UIView.animate(withDuration: 0.3, delay: 0.35) {
+            self.videoMaskView.alpha = 1.0
         }
     }
-    
 }
 
 class ISCropAreaView: UIView {
@@ -499,7 +523,7 @@ class ISTimeRangeSelectView: UIView {
     private var widthPerSecond: Double = 129.0 // 底部图片预览进图视图, 每秒对应宽度, 单位: pt
     let fps: Double
     var horizonInset: Double
-    private var previewThumbSize: CGSize = CGSizeMake(30, 40)
+    private(set) var previewThumbSize: CGSize = CGSizeMake(30, 40)
     
     /// 当前进度指示器
     private let progressIndicatorView: UIView = UIView()

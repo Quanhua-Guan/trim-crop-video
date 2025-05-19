@@ -49,3 +49,6 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
 }
 
+class YZDBaseVC: UIViewController {
+    
+}
