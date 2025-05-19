@@ -22,8 +22,6 @@ class ISVideoCropViewController: YZDBaseVC {
     
     private var playButton = UIButton(type: .custom)
     
-    private var videoSize: CGSize = .zero
-    
     private var exportProgressTimer: Timer?
     
     private var startTime: CMTime {
@@ -254,20 +252,7 @@ class ISVideoCropViewController: YZDBaseVC {
     // MARK: Crop & Export
     
     private func crop() {
-        var cropRect = self.videoPreviewView.cropRect
-        cropRect.origin = CGPointMake(
-            cropRect.minX / videoPreviewView.bounds.width * videoSize.width,
-            cropRect.minY / videoPreviewView.bounds.height * videoSize.height
-        )
-        cropRect.size = CGSizeMake(
-            cropRect.width / videoPreviewView.bounds.width * videoSize.width,
-            cropRect.height / videoPreviewView.bounds.height * videoSize.height
-        )
-        let originFlipTransform = CGAffineTransform(scaleX: 1, y: -1)
-        let frameTranslateTransform = CGAffineTransform(translationX: 0, y: videoSize.height)
-        cropRect = cropRect.applying(originFlipTransform)
-        cropRect = cropRect.applying(frameTranslateTransform)
-        
+        let cropRect = videoPreviewView.cropRect
         let cropScaleComposition = AVMutableVideoComposition(asset: asset) { request in
             guard let cropFilter = CIFilter(name: "CICrop") else {
                 request.finish(with: request.sourceImage, context: nil)
@@ -290,9 +275,10 @@ class ISVideoCropViewController: YZDBaseVC {
         
         if let exporter = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetHighestQuality) {
             // 监听导出进度
+            navigationView.progressView.progress = 0.1
             exportProgressTimer = Timer(timeInterval: 0.05, repeats: true, block: { [weak exporter, weak self] _ in
                 if let progress = exporter?.progress {
-                    self?.navigationView.progressView.progress = CGFloat(progress)
+                    self?.navigationView.progressView.progress = max(0.1, CGFloat(progress))
                     if progress >= 1.0, self?.exportProgressTimer?.isValid == true {
                         self?.exportProgressTimer?.invalidate()
                     }
@@ -306,7 +292,7 @@ class ISVideoCropViewController: YZDBaseVC {
             exporter.timeRange = timeRange
             exporter.exportAsynchronously {
                 DispatchQueue.main.async { [weak exporter, weak self] in
-                    self?.navigationView.hideProgress(hide: true)
+                    self?.navigationView.progressView.progress = 1
                     if self?.exportProgressTimer?.isValid == true {
                         self?.exportProgressTimer?.invalidate()
                     }
@@ -352,10 +338,10 @@ class ISNavigationView: UIView {
         addSubview(doneButton)
         addSubview(progressView)
         
-        titleLabel.text = "调整"//.L // TODO: guan
-        
         backButton.yzd.sizeEqualTo(44, 44).leading(16).top().end()
-        let backImageView = UIImageView(image: UIImage(named: "arrow_left_24"))
+        let backImageView = UIImageView(image: UIImage(named: "arrow_left_24")?.withRenderingMode(.alwaysTemplate))
+        backImageView.isUserInteractionEnabled = false
+        backImageView.tintColor = .white
         backButton.addSubview(backImageView)
         backImageView.yzd.sizeEqualTo(24, 24).center().end()
         backButton.addAction(.init(handler: { [weak self] _ in
@@ -378,11 +364,13 @@ class ISNavigationView: UIView {
         progressView.showProgressText = true
         progressView.yzd.center(equalTo: doneButton).sizeEqualTo(26, 26).end()
         
+        titleLabel.text = "调整"//.L // TODO: guan
         titleLabel.textColor = .white
+        titleLabel.textAlignment = .center
         titleLabel.font = .systemFont(ofSize: 18, weight: .semibold)
         titleLabel.yzd.leadingEqualTo(anchor: backButton.trailingAnchor)
-            .trailingEqualTo(anchor: backButton.leadingAnchor)
-            .top().bottom().height()
+            .trailingEqualTo(anchor: doneButton.leadingAnchor)
+            .centerY().height()
             .end()
     }
     
@@ -410,11 +398,26 @@ class ISVideoCropPreviewView: UIView, UIScrollViewDelegate {
     var playerPlayingStateChanged: ((_ isPlaying: Bool) -> Void)?
     
     var cropRect: CGRect {
-        cropAreaView.convert(cropAreaView.bounds, to: videoPreviewView)
+        var cropRect = cropAreaView.convert(cropAreaView.bounds, to: videoPreviewView)
+        let videoPreviewSize = videoPreviewView.bounds.size
+        cropRect.origin = CGPointMake(
+            cropRect.minX / videoPreviewSize.width * videoSize.width,
+            cropRect.minY / videoPreviewSize.height * videoSize.height
+        )
+        cropRect.size = CGSizeMake(
+            cropRect.width / videoPreviewSize.width * videoSize.width,
+            cropRect.height / videoPreviewSize.height * videoSize.height
+        )
+        let originFlipTransform = CGAffineTransform(scaleX: 1, y: -1)
+        let frameTranslateTransform = CGAffineTransform(translationX: 0, y: videoSize.height)
+        cropRect = cropRect.applying(originFlipTransform)
+        cropRect = cropRect.applying(frameTranslateTransform)
+        
+        return cropRect
     }
     
     var isPlaying: Bool {
-        player.rate !=  0
+        player.rate != 0
     }
     
     init(player: AVPlayer, cropSize: CGSize) {
