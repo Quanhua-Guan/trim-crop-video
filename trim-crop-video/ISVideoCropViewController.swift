@@ -8,6 +8,7 @@
 import UIKit
 import AVFoundation
 
+/// 视频裁剪(支持裁剪视频大小和时间)
 class ISVideoCropViewController: YZDBaseVC {
     
     var cropDidFinished: ((_ croppedVideoUrl: URL) -> Void)?
@@ -91,8 +92,7 @@ class ISVideoCropViewController: YZDBaseVC {
         
         let videoDuration = CMTimeGetSeconds(asset.duration)
         let maxDuration = min(6.0, videoDuration)
-        let w = getVideoPreviewViewBounds().width // 预览视图展示宽度 w
-        let fps = ISTimeRangeSelectView.calcFps(displayWidth: w, maxDuration: maxDuration)
+        let fps = ISTimeRangeSelectView.calcFps(displayWidth: view.bounds.width, maxDuration: maxDuration)
         
         let isIpad = UIDevice.current.userInterfaceIdiom == .pad
         let previewThumbSize = isIpad ? CGSizeMake(60, 80) : CGSizeMake(30, 40)
@@ -392,7 +392,7 @@ class ISVideoCropPreviewView: UIView, UIScrollViewDelegate {
     private var videoContainerScrollView = UIScrollView()
     private var (videoMaskView, videoMaskLayer) = (UIView(), CAShapeLayer())
     private var cropAreaView = ISCropAreaView()
-    private var (videoPreviewView, playerLayer, playButton) = (UIView(), AVPlayerLayer(), UIButton(type: .custom))
+    private var (videoPreviewView, playerLayer) = (UIView(), AVPlayerLayer())
     
     private var endTimeObserver: Any?
     private var periodicTimeObserver: Any?
@@ -462,6 +462,14 @@ class ISVideoCropPreviewView: UIView, UIScrollViewDelegate {
         player.volume = 0
         player.pause()
         playerPlayingStateChanged?(false)
+        
+        self.videoMaskView.alpha = 0.75
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
+            UIView.animate(withDuration: 0.3) {
+                self.cropAreaView.lineAlpha = 0
+                self.videoMaskView.alpha = 1.0
+            }
+        }
     }
     
     override func layoutSubviews() {
@@ -477,7 +485,7 @@ class ISVideoCropPreviewView: UIView, UIScrollViewDelegate {
         
         if oldFrame != cropAreaView.frame {
             let path = UIBezierPath()
-            path.append(.init(rect: videoMaskView.bounds))
+            path.append(.init(rect: videoMaskView.bounds.insetBy(dx: -10, dy: -10)))
             path.append(.init(rect: videoMaskView.convert(cropAreaView.bounds, from: cropAreaView)))
             videoMaskLayer.path = path.cgPath
             videoMaskLayer.fillRule = .evenOdd
@@ -486,19 +494,25 @@ class ISVideoCropPreviewView: UIView, UIScrollViewDelegate {
         
         var newSize = ISMakeRectAspectFill(aspectRatio: videoSize, insideRect: videoContainerScrollView.bounds).size
         newSize = CGSizeMake(floor(newSize.width), floor(newSize.height))
-        let newBounds = CGRect(origin: .zero, size: newSize)
-        if videoPreviewView.bounds != newBounds {
-            videoPreviewView.bounds = newBounds
-            playerLayer.frame = newBounds
-            videoContainerScrollView.contentSize = videoPreviewView.bounds.size
-            let minZoomScale = max(cropAreaView.bounds.width / newBounds.width, cropAreaView.bounds.height / newBounds.height)
-            videoContainerScrollView.zoomScale = minZoomScale
-            videoContainerScrollView.minimumZoomScale = minZoomScale
-            videoContainerScrollView.maximumZoomScale = max(ceil(minZoomScale + 1), 5.0)
+        let newFrame = CGRect(origin: .zero, size: newSize)
+        if videoContainerScrollView.contentSize != newFrame.size {
+            videoContainerScrollView.contentSize = newFrame.size
+            videoPreviewView.frame = newFrame
+            playerLayer.frame = videoPreviewView.bounds
             
             let frame: CGRect = videoMaskView.convert(cropAreaView.bounds, from: cropAreaView)
             videoContainerScrollView.contentInset = UIEdgeInsets(top: frame.minY, left: frame.minX, bottom: frame.minY, right: frame.minX)
-            videoPreviewView.center = CGPointMake(videoPreviewView.bounds.midX, videoPreviewView.bounds.midY)
+            
+            let minZoomScale = max(cropAreaView.bounds.width / newFrame.width, cropAreaView.bounds.height / newFrame.height)
+            videoContainerScrollView.minimumZoomScale = minZoomScale
+            videoContainerScrollView.maximumZoomScale = max(ceil(minZoomScale + 1), 5.0)
+            DispatchQueue.main.async {
+                self.videoContainerScrollView.zoomScale = minZoomScale
+                self.videoContainerScrollView.contentOffset = CGPointMake(
+                    (newFrame.width * minZoomScale - self.videoContainerScrollView.bounds.width) * 0.5,
+                    (newFrame.height * minZoomScale - self.videoContainerScrollView.bounds.height) * 0.5
+                )
+            }
         }
     }
     
@@ -560,24 +574,28 @@ class ISVideoCropPreviewView: UIView, UIScrollViewDelegate {
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
         UIView.animate(withDuration: 0.3) {
             self.videoMaskView.alpha = 0.75
+            self.cropAreaView.lineAlpha = 1.0
         }
     }
     
     func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) {
         UIView.animate(withDuration: 0.3) {
             self.videoMaskView.alpha = 0.75
+            self.cropAreaView.lineAlpha = 1.0
         }
     }
     
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         UIView.animate(withDuration: 0.3, delay: 0.35) {
             self.videoMaskView.alpha = 1.0
+            self.cropAreaView.lineAlpha = 0
         }
     }
     
     func scrollViewDidEndZooming(_ scrollView: UIScrollView, with view: UIView?, atScale scale: CGFloat) {
         UIView.animate(withDuration: 0.3, delay: 0.35) {
             self.videoMaskView.alpha = 1.0
+            self.cropAreaView.lineAlpha = 0
         }
     }
 }
@@ -914,7 +932,7 @@ class ISTimeRangeSelectView: UIView, UIScrollViewDelegate {
             self.previewImagesScrollView.contentOffset = offset
         } completion: { _ in
             var insets = self.previewImagesScrollView.contentInset
-            let left = max(insets.left, (self.previewImagesScrollView.bounds.width - self.timeRangeView.bounds.width) * 0.5)
+            let left = (self.previewImagesScrollView.bounds.width - self.timeRangeView.bounds.width) * 0.5
             insets.left = left
             insets.right = left
             self.previewImagesScrollView.contentInset = insets

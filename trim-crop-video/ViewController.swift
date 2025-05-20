@@ -144,8 +144,19 @@ class ViewController: UIViewController {
           NotificationCenter.default.post(name: NSNotification.Name("CropDone"), object: outputURL)
       }
       self.present(vc, animated: true)
+      
   }
-
+    @IBAction func togoGifCropVC(_ sender: UIButton) {
+        let url = Bundle.main.url(forResource: "2", withExtension: "gif")!
+        let image = UIImage.animatedImage(withGIFData: try! Data(contentsOf: url), cacheKey: "abc")!
+        let vc = ISGifCropViewController(image: image, cropSize: CGSizeMake(170, 170))
+        vc.modalPresentationStyle = .fullScreen
+        vc.cropDidFinished = { images, duration in
+            NotificationCenter.default.post(name: NSNotification.Name("GifCropDone"), object: (images, duration))
+        }
+        self.present(vc, animated: true)
+    }
+        
   @IBAction func playTapped(_ sender: UIButton) {
     self.croppingView.isHidden = true
     //self.prepareForCropping()
@@ -325,5 +336,51 @@ extension String {
         else {
             return String(format: NSLocalizedString(self, comment: ""), arguments: arguments)
         }
+    }
+}
+
+private var gifCache: NSCache<NSString, UIImage> = {
+    let c = NSCache<NSString, UIImage>()
+    c.totalCostLimit = 15 * 1024 * 1024
+    return c
+}()
+
+extension UIImage {
+    var image: Image {
+        Image(uiImage: self)
+    }
+    
+    static func animatedImage(withGIFData data: Data, cacheKey: String? = nil) -> UIImage? {
+        if let cacheKey = cacheKey {
+            if let cacheImage = gifCache.object(forKey: cacheKey as NSString) {
+                return cacheImage
+            }
+        }
+        
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        
+        let frameCount = CGImageSourceGetCount(source)
+        var frames: [UIImage] = []
+        var gifDuration = 0.0
+        
+        for i in 0..<frameCount {
+            guard let cgImage = CGImageSourceCreateImageAtIndex(source, i, nil) else { continue }
+            
+            if let properties = CGImageSourceCopyPropertiesAtIndex(source, i, nil),
+               let gifInfo = (properties as NSDictionary)[kCGImagePropertyGIFDictionary as String] as? NSDictionary,
+               let frameDuration = (gifInfo[kCGImagePropertyGIFDelayTime as String] as? NSNumber)
+            {
+                gifDuration += frameDuration.doubleValue
+            }
+                        
+            let frameImage = UIImage(cgImage: cgImage)
+            frames.append(frameImage)
+        }
+        
+        let animatedImage = UIImage.animatedImage(with: frames, duration: gifDuration)
+        if let animatedImage = animatedImage, let cacheKey = cacheKey {
+            gifCache.setObject(animatedImage, forKey: cacheKey as NSString)
+        }
+        return animatedImage
     }
 }
