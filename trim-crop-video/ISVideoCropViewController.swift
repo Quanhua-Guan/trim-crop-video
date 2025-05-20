@@ -81,8 +81,9 @@ class ISVideoCropViewController: YZDBaseVC {
         }
         
         view.addSubview(playButton)
-        playButton.setImage(UIImage(named: "diyLivePhotoPlay"), for: .normal)
-        playButton.setImage(UIImage(named: "diyLivePhotoPause"), for: .selected)
+        playButton.setImage(UIImage(named: "diyLivePhotoPlay")?.withRenderingMode(.alwaysTemplate), for: .normal)
+        playButton.setImage(UIImage(named: "diyLivePhotoPause")?.withRenderingMode(.alwaysTemplate), for: .selected)
+        playButton.imageView?.tintColor = .white
         playButton.isSelected = false
         playButton.imageEdgeInsets = UIEdgeInsets(top: 10, left: 10, bottom: 10, right: 10)
         playButton.addAction(.init(handler: { [weak self] _ in
@@ -702,7 +703,9 @@ class ISTimeRangeSelectView: UIView, UIScrollViewDelegate {
     private let startTimePanGesture: UIPanGestureRecognizer = UIPanGestureRecognizer()
     private let endTimePanGesture: UIPanGestureRecognizer = UIPanGestureRecognizer()
     
-    init(duration: Double, previewImages: [UIImage], fps: Double, horizonInset: Double = 40, previewThumbSize: CGSize = CGSizeMake(30, 40)) {
+    init(duration: Double, previewImages: [UIImage], fps: Double, horizonInset: Double = 40, previewThumbSize: CGSize = CGSizeMake(30, 40), defaultMinDuration: Double = 0.5, defaultMaxDuration: Double = 6.0) {
+        self.minDuration = defaultMinDuration
+        self.maxDuration = defaultMaxDuration
         self.duration = duration
         self.previewImages = previewImages
         self.fps = fps
@@ -815,7 +818,7 @@ class ISTimeRangeSelectView: UIView, UIScrollViewDelegate {
     }
     
     func updateProgressIndicator(time: Double) {
-        progressIndicatorView.center = CGPointMake(time / duration * previewImagesScrollViewContentView.bounds.width, progressIndicatorView.center.y)
+        progressIndicatorView.center = CGPointMake(time / duration * (previewImagesScrollViewContentView.bounds.width - 2 * r) + 1 * r, progressIndicatorView.center.y)
     }
     
     private func updateSelectSecondViews() {
@@ -916,8 +919,8 @@ class ISTimeRangeSelectView: UIView, UIScrollViewDelegate {
         timeRangeView.frame = CGRectMake(x, 25.0 * r, w, previewThumbSize.height + 4 * r)
         
         if updateStartEndTime {
-            startTimeView.frame = CGRectMake(timeRangeView.frame.minX - 5 * r - 25, timeRangeView.frame.minY, 50, previewThumbSize.height + 4 * r)
-            endTimeView.frame = CGRectMake(timeRangeView.frame.maxX + 5 * r - 25, timeRangeView.frame.minY, 50, previewThumbSize.height + 4 * r)
+            startTimeView.frame = CGRectMake(timeRangeView.frame.minX - 5 * r - 25 + 0.5, timeRangeView.frame.minY, 50, previewThumbSize.height + 4 * r)
+            endTimeView.frame = CGRectMake(timeRangeView.frame.maxX + 5 * r - 25 - 0.5, timeRangeView.frame.minY, 50, previewThumbSize.height + 4 * r)
         }
     }
     
@@ -1041,13 +1044,13 @@ class ISTimeRangeSelectView: UIView, UIScrollViewDelegate {
         timeRangeView.frame = CGRectMake(x, timeRangeView.frame.minY, w, timeRangeView.frame.height)
         
         startTimeView.frame = CGRectMake(
-            timeRangeView.frame.minX - 5 * r - 25,
+            timeRangeView.frame.minX - 5 * r - 25 + 0.5,
             startTimeView.frame.minY,
             startTimeView.frame.width,
             startTimeView.frame.height
         )
         endTimeView.frame = CGRectMake(
-            timeRangeView.frame.maxX + 5 * r - 25,
+            timeRangeView.frame.maxX + 5 * r - 25 - 0.5,
             endTimeView.frame.minY,
             endTimeView.frame.width,
             endTimeView.frame.height

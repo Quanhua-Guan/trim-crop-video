@@ -36,6 +36,9 @@ class ViewController: UIViewController {
   @IBOutlet var startTimeSlider: UISlider!
   @IBOutlet var endTimeSlider: UISlider!
     
+    @IBOutlet weak var imageView: UIImageView!
+    
+    
     var url: URL?
 
     override func viewDidLoad() {
@@ -45,6 +48,14 @@ class ViewController: UIViewController {
             if let self, let url = note.object as? URL {
                 self.url = url
                 self.loadCleanVideo()
+            }
+        }
+        
+        NotificationCenter.default.addObserver(forName: NSNotification.Name("GifCropDone"), object: nil, queue: .main) { [weak self] note in
+            if let self, let (images, duration) = note.object as? ([UIImage], Double) {
+                let image = UIImage.animatedImage(with: images, duration: duration)
+                self.imageView.image = image
+                self.imageView.startAnimating()
             }
         }
     }
@@ -147,8 +158,9 @@ class ViewController: UIViewController {
       
   }
     @IBAction func togoGifCropVC(_ sender: UIButton) {
-        let url = Bundle.main.url(forResource: "2", withExtension: "gif")!
-        let image = UIImage.animatedImage(withGIFData: try! Data(contentsOf: url), cacheKey: "abc")!
+        let title = sender.title(for: .normal)
+        let url = Bundle.main.url(forResource: title == "gifcat" ? "cat" : "2", withExtension: "gif")!
+        let image = UIImage.animatedImage(withGIFData: try! Data(contentsOf: url), cacheKey: title)!
         let vc = ISGifCropViewController(image: image, cropSize: CGSizeMake(170, 170))
         vc.modalPresentationStyle = .fullScreen
         vc.cropDidFinished = { images, duration in

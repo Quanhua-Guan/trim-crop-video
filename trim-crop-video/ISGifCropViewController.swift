@@ -22,8 +22,6 @@ class ISGifCropViewController: YZDBaseVC {
     
     private var playButton = UIButton(type: .custom)
     
-    private var exportProgressTimer: Timer?
-    
     private var startTime: Double {
         timeRangeView?.startTime ?? 0.0
     }
@@ -70,8 +68,9 @@ class ISGifCropViewController: YZDBaseVC {
         }
         
         view.addSubview(playButton)
-        playButton.setImage(UIImage(named: "diyLivePhotoPlay"), for: .normal)
-        playButton.setImage(UIImage(named: "diyLivePhotoPause"), for: .selected)
+        playButton.setImage(UIImage(named: "diyLivePhotoPlay")?.withRenderingMode(.alwaysTemplate), for: .normal)
+        playButton.setImage(UIImage(named: "diyLivePhotoPause")?.withRenderingMode(.alwaysTemplate), for: .selected)
+        playButton.imageView?.tintColor = .white
         playButton.isSelected = false
         playButton.imageEdgeInsets = UIEdgeInsets(top: 10, left: 10, bottom: 10, right: 10)
         playButton.addAction(.init(handler: { [weak self] _ in
@@ -85,56 +84,51 @@ class ISGifCropViewController: YZDBaseVC {
         
         let isIpad = UIDevice.current.userInterfaceIdiom == .pad
         let previewThumbSize = isIpad ? CGSizeMake(60, 80) : CGSizeMake(30, 40)
-        
-        getVideoPreviewImages(fps: fps, previewThumbSize: previewThumbSize) { [weak self] images in
+        let images = getGifPreviewImages(fps: fps)
+        let horizonInset = isIpad ? 80.0 : 40.0
+        let cropTimeRangeView = ISTimeRangeSelectView(duration: gifDuration, previewImages: images, fps: fps, horizonInset: horizonInset, previewThumbSize: previewThumbSize, defaultMinDuration: 0.3)
+        cropTimeRangeView.didStopScroll = { [weak self] v in
+            // 完全停止后, 触发播放器更新播放范围
+            guard let startTime = self?.startTime, let endTime = self?.endTime else { return }
+            self?.gifPreviewView.updatePlayerStartEndTime(startTime: startTime, endTime: endTime)
+        }
+        cropTimeRangeView.onStartTimeChanged = { [weak self] v in
             guard let self else { return }
             
-            let horizonInset = isIpad ? 80.0 : 40.0
-            let cropTimeRangeView = ISTimeRangeSelectView(duration: gifDuration, previewImages: images, fps: fps, horizonInset: horizonInset, previewThumbSize: previewThumbSize)
-            cropTimeRangeView.didStopScroll = { [weak self] v in
-                // 完全停止后, 触发播放器更新播放范围
-                guard let startTime = self?.startTime, let endTime = self?.endTime else { return }
-                self?.gifPreviewView.updatePlayerStartEndTime(startTime: startTime, endTime: endTime)
+            if self.gifPreviewView.isPlaying {
+                self.gifPreviewView.pause()
             }
-            cropTimeRangeView.onStartTimeChanged = { [weak self] v in
-                guard let self else { return }
-                
-                if self.gifPreviewView.isPlaying {
-                    self.gifPreviewView.pause()
-                }
-                self.gifPreviewView.seek(to: self.startTime)
-            }
-            cropTimeRangeView.onEndTimeChanged = { [weak self] v in
-                guard let self else { return }
-                
-                if self.gifPreviewView.isPlaying {
-                    self.gifPreviewView.pause()
-                }
-                self.gifPreviewView.seek(to: self.endTime)
-            }
-            cropTimeRangeView.onStartTimeChangeEnded = { [weak self] v in
-                guard let startTime = self?.startTime, let endTime = self?.endTime else { return }
-                self?.gifPreviewView.updatePlayerStartEndTime(startTime: startTime, endTime: endTime)
-            }
-            cropTimeRangeView.onEndTimeChangeEnded = { [weak self] v in
-                guard let startTime = self?.startTime, let endTime = self?.endTime else { return }
-                self?.gifPreviewView.updatePlayerStartEndTime(startTime: startTime, endTime: endTime)
-            }
-            self.timeRangeView = cropTimeRangeView
-            self.view.addSubview(cropTimeRangeView)
-            self.view.setNeedsLayout()
+            self.gifPreviewView.seek(to: self.startTime)
         }
+        cropTimeRangeView.onEndTimeChanged = { [weak self] v in
+            guard let self else { return }
+            
+            if self.gifPreviewView.isPlaying {
+                self.gifPreviewView.pause()
+            }
+            self.gifPreviewView.seek(to: self.endTime)
+        }
+        cropTimeRangeView.onStartTimeChangeEnded = { [weak self] v in
+            guard let startTime = self?.startTime, let endTime = self?.endTime else { return }
+            self?.gifPreviewView.updatePlayerStartEndTime(startTime: startTime, endTime: endTime)
+        }
+        cropTimeRangeView.onEndTimeChangeEnded = { [weak self] v in
+            guard let startTime = self?.startTime, let endTime = self?.endTime else { return }
+            self?.gifPreviewView.updatePlayerStartEndTime(startTime: startTime, endTime: endTime)
+        }
+        timeRangeView = cropTimeRangeView
+        view.addSubview(cropTimeRangeView)
     }
     
-    private func getVideoPreviewImages(fps: Double, previewThumbSize: CGSize, complete: (([UIImage]) -> Void)?) {
+    private func getGifPreviewImages(fps: Double) -> [UIImage] {
         let images = gifImage.images ?? []
         let duration = gifImage.duration
-        let targetCount = Int(ceil(duration / fps))
+        let targetCount = Int(ceil(duration * fps))
         let imageCount = images.count
         
         var resultImages = [UIImage]()
         for i in 0..<targetCount {
-            var index = Int(Double(i) / Double(targetCount) * Double(imageCount))
+            let index = Int(Double(i) / Double(targetCount) * Double(imageCount))
             if index >= 0 && index < images.count {
                 resultImages.append(images[index])
             } else {
@@ -142,7 +136,7 @@ class ISGifCropViewController: YZDBaseVC {
             }
         }
         
-        complete?(resultImages)
+        return resultImages
     }
     
     // MARK: Layout
@@ -192,48 +186,36 @@ class ISGifCropViewController: YZDBaseVC {
     
     private func crop() {
         let cropRect = gifPreviewView.cropRect
-//        
-//        let timeRange = CMTimeRangeFromTimeToTime(start: startTime, end: endTime)
-//        
-//        if let exporter = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetHighestQuality) {
-//            // 监听导出进度
-//            navigationView.progressView.progress = 0.1
-//            let timer = Timer(timeInterval: 0.05, repeats: true, block: { [weak exporter, weak self] _ in
-//                if let progress = exporter?.progress {
-//                    self?.navigationView.progressView.progress = max(0.1, CGFloat(progress))
-//                    if progress >= 1.0, self?.exportProgressTimer?.isValid == true {
-//                        self?.exportProgressTimer?.invalidate()
-//                    }
-//                }
-//            })
-//            exportProgressTimer = timer
-//            RunLoop.current.add(timer, forMode: .common)
-//            navigationView.hideProgress(hide: false)
-//            
-//            exporter.videoComposition = cropScaleComposition
-//            exporter.outputURL = outputURL
-//            exporter.outputFileType = .mp4
-//            exporter.timeRange = timeRange
-//            exporter.exportAsynchronously {
-//                DispatchQueue.main.async { [weak exporter, weak self] in
-//                    self?.navigationView.progressView.progress = 1
-//                    if self?.exportProgressTimer?.isValid == true {
-//                        self?.exportProgressTimer?.invalidate()
-//                        self?.exportProgressTimer = nil
-//                    }
-//                    
-//                    if let error = exporter?.error {
-//                        debugPrint(error.localizedDescription)
-//                    } else {
-//                        // 导出成功回调, 然后关闭页面
-//                        self?.cropDidFinished?(outputURL)
-//                        self?.close()
-//                    }
-//                }
-//            }
-//        } else {
-//            debugPrint("error")
-//        }
+        let selectedImages = gifPreviewView.selectedImages
+        let duration = endTime - startTime
+        guard selectedImages.count > 0, duration > 0 else { return }
+        
+        navigationView.hideProgress(hide: false)
+        navigationView.progressView.progress = 0.1
+        DispatchQueue.global().async { [weak self] in
+            guard let self else { return }
+
+            var resultImgs = [UIImage]()
+            for img in selectedImages {
+                if let croppedCGImg = img.cgImage?.cropping(to: cropRect) {
+                    let croppedImg = UIImage(cgImage: croppedCGImg)
+                    resultImgs.append(croppedImg)
+                    
+                    let progress = max(0.1, Double(resultImgs.count) / Double(selectedImages.count))
+                    DispatchQueue.main.async {
+                        self.navigationView.progressView.progress = progress
+                    }
+                } else {
+                    assert(false)
+                }
+            }
+            
+            DispatchQueue.main.async {
+                self.navigationView.progressView.progress = 1.0
+                self.cropDidFinished?(resultImgs, duration)
+                self.close()
+            }
+        }
     }
 }
 
@@ -261,19 +243,29 @@ class ISGifCropPreviewView: UIView, UIScrollViewDelegate {
         }
     }
     
+    var selectedImages: [UIImage] {
+        var images = [UIImage]()
+        if let imgs = image.images, startIndex <= endIndex, startIndex >= 0, endIndex < imgs.count {
+            for i in startIndex...endIndex {
+                images.append(imgs[i])
+            }
+        }
+        return images
+    }
+    
     var currentTimeChanged: ((_ time: Double) -> Void)?
     var playingStateChanged: ((_ isPlaying: Bool) -> Void)?
     
     var cropRect: CGRect {
         var cropRect = cropAreaView.convert(cropAreaView.bounds, to: gifPreviewView)
-        let videoPreviewSize = gifPreviewView.bounds.size
+        let gifPreviewSize = gifPreviewView.bounds.size
         cropRect.origin = CGPointMake(
-            cropRect.minX / videoPreviewSize.width * imagePixelSize.width,
-            cropRect.minY / videoPreviewSize.height * imagePixelSize.height
+            cropRect.minX / gifPreviewSize.width * imagePixelSize.width,
+            cropRect.minY / gifPreviewSize.height * imagePixelSize.height
         )
         cropRect.size = CGSizeMake(
-            cropRect.width / videoPreviewSize.width * imagePixelSize.width,
-            cropRect.height / videoPreviewSize.height * imagePixelSize.height
+            cropRect.width / gifPreviewSize.width * imagePixelSize.width,
+            cropRect.height / gifPreviewSize.height * imagePixelSize.height
         )
         return cropRect
     }
@@ -287,7 +279,7 @@ class ISGifCropPreviewView: UIView, UIScrollViewDelegate {
     }
     
     required init?(coder: NSCoder) {
-        fatalError("no imp: ISVideoCropPreviewView")
+        fatalError("no imp: ISGifCropPreviewView")
     }
     
     private func setup() {
@@ -305,7 +297,8 @@ class ISGifCropPreviewView: UIView, UIScrollViewDelegate {
         
         imagePixelSize = CGSizeMake(image.size.width * image.scale, image.size.height * image.scale)
         
-        endIndex = max(0, (image.images?.count ?? 0 - 1))
+        startIndex = 0
+        endIndex = max(0, ((image.images?.count ?? 0) - 1))
         currentIndex = 0
         
         isPlaying = false
@@ -367,8 +360,9 @@ class ISGifCropPreviewView: UIView, UIScrollViewDelegate {
         guard let images = image.images else { return }
         
         let duration = image.duration
-        startIndex = Int(round((min(1.0, startTime / duration)) * Double(images.count - 1)))
-        endIndex = Int(round((min(1.0, endTime / duration)) * Double(images.count - 1)))
+        startIndex = max(0, Int(ceil((min(1.0, startTime / duration)) * Double(images.count - 1))))
+        endIndex = min(images.count - 1, Int(floor((min(1.0, endTime / duration)) * Double(images.count - 1))))
+        
         if currentIndex < startIndex || currentIndex > endIndex {
             currentIndex = startIndex
         }
@@ -383,6 +377,8 @@ class ISGifCropPreviewView: UIView, UIScrollViewDelegate {
     }
     
     func play() {
+        guard isPlaying == false else { return }
+        
         guard let count = image.images?.count, count > 0, image.duration > 0 else { return }
         let timer = Timer(timeInterval: image.duration / Double(count), repeats: true) { [weak self] _ in
             guard let self else { return }
@@ -393,9 +389,13 @@ class ISGifCropPreviewView: UIView, UIScrollViewDelegate {
             }
             if self.currentIndex != index {
                 self.currentIndex = index
+                if let images = self.image.images {
+                    self.currentTimeChanged?(Double(index) / Double(images.count - 1) * image.duration)
+                }
             }
         }
         RunLoop.main.add(timer, forMode: .common)
+        self.gifPlayTimer = timer
         isPlaying = true
         playingStateChanged?(isPlaying)
     }
@@ -405,15 +405,18 @@ class ISGifCropPreviewView: UIView, UIScrollViewDelegate {
             timer.invalidate()
             gifPlayTimer = nil
         }
-        isPlaying = false
-        playingStateChanged?(isPlaying)
+        
+        if isPlaying {
+            isPlaying = false
+            playingStateChanged?(isPlaying)
+        }
     }
     
     func seek(to time: Double) {
         guard let images = image.images, time > 0 else { return }
         
         let duration = image.duration
-        let index = Int(round((min(1.0, time / duration)) * Double(images.count - 1)))
+        let index = Int(ceil((min(1.0, time / duration)) * Double(images.count - 1)))
         currentIndex = index
     }
     

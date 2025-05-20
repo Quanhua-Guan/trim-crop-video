@@ -44,17 +44,24 @@
                                         </connections>
                                     </button>
                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="qNB-yf-dGf">
-                                        <rect key="frame" x="122.5" y="0.0" width="39" height="30"/>
+                                        <rect key="frame" x="96" y="0.0" width="39" height="30"/>
                                         <state key="normal" title="Reset"/>
                                         <connections>
                                             <action selector="resetTapped:" destination="BYZ-38-t0r" eventType="touchUpInside" id="gPs-XG-D4J"/>
                                         </connections>
                                     </button>
                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="oXL-Pn-EP7">
-                                        <rect key="frame" x="230.5" y="0.0" width="30" height="30"/>
+                                        <rect key="frame" x="176.5" y="0.0" width="30" height="30"/>
                                         <state key="normal" title="gif"/>
                                         <connections>
                                             <action selector="togoGifCropVC:" destination="BYZ-38-t0r" eventType="touchUpInside" id="FGV-cV-I5y"/>
+                                        </connections>
+                                    </button>
+                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="TSg-Rh-9V9">
+                                        <rect key="frame" x="248.5" y="0.0" width="39" height="30"/>
+                                        <state key="normal" title="gifcat"/>
+                                        <connections>
+                                            <action selector="togoGifCropVC:" destination="BYZ-38-t0r" eventType="touchUpInside" id="RfD-Av-Mak"/>
                                         </connections>
                                     </button>
                                     <button opaque="NO" contentMode="scaleToFill" enabled="NO" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="osv-eu-LY8">
@@ -106,6 +113,14 @@
                                     </slider>
                                 </subviews>
                             </stackView>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="Die-Kd-oDs">
+                                <rect key="frame" x="295" y="589.5" width="99" height="79"/>
+                                <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+                                <constraints>
+                                    <constraint firstAttribute="height" constant="79" id="OfF-2O-ytc"/>
+                                    <constraint firstAttribute="width" constant="99" id="g4l-4G-FXm"/>
+                                </constraints>
+                            </imageView>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="6Tk-OE-BBY"/>
                         <color key="backgroundColor" systemColor="systemBackgroundColor"/>
@@ -113,6 +128,7 @@
                             <constraint firstItem="pEN-yG-3DW" firstAttribute="centerX" secondItem="MYL-eD-6LE" secondAttribute="centerX" id="1FC-5v-7rE"/>
                             <constraint firstItem="8a0-FQ-UYf" firstAttribute="width" secondItem="MYL-eD-6LE" secondAttribute="width" id="57I-7N-l59"/>
                             <constraint firstItem="pEN-yG-3DW" firstAttribute="top" secondItem="PAh-gq-wdL" secondAttribute="bottom" constant="12" id="FWi-XN-tFL"/>
+                            <constraint firstItem="Die-Kd-oDs" firstAttribute="trailing" secondItem="MYL-eD-6LE" secondAttribute="trailing" id="Frm-l6-wo5"/>
                             <constraint firstItem="8a0-FQ-UYf" firstAttribute="centerX" secondItem="8bC-Xf-vdC" secondAttribute="centerX" id="HoZ-O7-Bh2"/>
                             <constraint firstItem="6Tk-OE-BBY" firstAttribute="bottom" secondItem="8a0-FQ-UYf" secondAttribute="bottom" constant="24" id="Mce-Ok-jbg"/>
                             <constraint firstItem="PAh-gq-wdL" firstAttribute="firstBaseline" secondItem="MYL-eD-6LE" secondAttribute="baseline" constant="22.5" symbolType="layoutAnchor" id="Q1A-Sb-XFn"/>
@@ -123,6 +139,7 @@
                             <constraint firstItem="pEN-yG-3DW" firstAttribute="width" secondItem="MYL-eD-6LE" secondAttribute="width" id="p96-EH-Mcd"/>
                             <constraint firstItem="8a0-FQ-UYf" firstAttribute="top" secondItem="pEN-yG-3DW" secondAttribute="bottom" constant="12" id="qZS-vk-B6H"/>
                             <constraint firstItem="PAh-gq-wdL" firstAttribute="centerX" secondItem="MYL-eD-6LE" secondAttribute="centerX" id="yJu-7r-TdD"/>
+                            <constraint firstItem="Die-Kd-oDs" firstAttribute="bottom" secondItem="MYL-eD-6LE" secondAttribute="bottom" id="zXt-og-Pz1"/>
                         </constraints>
                     </view>
                     <tabBarItem key="tabBarItem" title="Fancy" image="star" catalog="system" id="JHG-wY-tIj"/>
@@ -130,6 +147,7 @@
                         <outlet property="croppingView" destination="jpW-fA-WKD" id="9mE-yw-OGb"/>
                         <outlet property="endTimeSlider" destination="F2g-1Y-aZ6" id="B9V-sO-IbL"/>
                         <outlet property="exportButton" destination="osv-eu-LY8" id="2no-av-ud7"/>
+                        <outlet property="imageView" destination="Die-Kd-oDs" id="pXe-zU-9vH"/>
                         <outlet property="playButton" destination="gRU-Ox-wu9" id="rd9-WK-TM9"/>
                         <outlet property="playerView" destination="MYL-eD-6LE" id="sLF-gm-N3U"/>
                         <outlet property="resetButton" destination="qNB-yf-dGf" id="S3P-GA-9je"/>
@@ -149,7 +167,7 @@
                     </connections>
                 </pinchGestureRecognizer>
             </objects>
-            <point key="canvasLocation" x="903" y="76"/>
+            <point key="canvasLocation" x="902.89855072463774" y="75.669642857142847"/>
         </scene>
         <!--Item-->
         <scene sceneID="EXT-uv-LBt">
