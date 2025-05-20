@@ -11,6 +11,7 @@
 		C633C66D2DD70BEA00F154BB /* v2.MOV in Resources */ = {isa = PBXBuildFile; fileRef = C633C66C2DD70BEA00F154BB /* v2.MOV */; };
 		C633C66E2DD70BEA00F154BB /* v1.MOV in Resources */ = {isa = PBXBuildFile; fileRef = C633C66B2DD70BEA00F154BB /* v1.MOV */; };
 		C6871A3F2DDADB1E00F17B07 /* YZDAutoLayoutHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6871A3E2DDADB1E00F17B07 /* YZDAutoLayoutHelper.swift */; };
+		C6871A422DDC10FF00F17B07 /* ISGifCropViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6871A412DDC10FF00F17B07 /* ISGifCropViewController.swift */; };
 		C6E275F12DD43AC100D353E0 /* ISVideoCropViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6E275F02DD43AC100D353E0 /* ISVideoCropViewController.swift */; };
 		D44DEF6826DCF7A2006821A2 /* BasicPlayerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D44DEF6726DCF7A2006821A2 /* BasicPlayerViewController.swift */; };
 		D470EC5026D596EA00E9C676 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = D470EC4F26D596EA00E9C676 /* AppDelegate.swift */; };
@@ -30,6 +31,7 @@
 		C633C66C2DD70BEA00F154BB /* v2.MOV */ = {isa = PBXFileReference; lastKnownFileType = video.quicktime; path = v2.MOV; sourceTree = "<group>"; };
 		C6871A3E2DDADB1E00F17B07 /* YZDAutoLayoutHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YZDAutoLayoutHelper.swift; sourceTree = "<group>"; };
 		C6871A402DDAE3D300F17B07 /* BridgeHeader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BridgeHeader.h; sourceTree = "<group>"; };
+		C6871A412DDC10FF00F17B07 /* ISGifCropViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ISGifCropViewController.swift; sourceTree = "<group>"; };
 		C6E275F02DD43AC100D353E0 /* ISVideoCropViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ISVideoCropViewController.swift; sourceTree = "<group>"; };
 		D44DEF6726DCF7A2006821A2 /* BasicPlayerViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BasicPlayerViewController.swift; sourceTree = "<group>"; };
 		D470EC4C26D596EA00E9C676 /* trim-crop-video.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "trim-crop-video.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -98,6 +100,7 @@
 				D470EC5326D596EA00E9C676 /* ViewController.swift */,
 				C6871A3E2DDADB1E00F17B07 /* YZDAutoLayoutHelper.swift */,
 				C6E275F02DD43AC100D353E0 /* ISVideoCropViewController.swift */,
+				C6871A412DDC10FF00F17B07 /* ISGifCropViewController.swift */,
 				D44DEF6726DCF7A2006821A2 /* BasicPlayerViewController.swift */,
 				C6871A402DDAE3D300F17B07 /* BridgeHeader.h */,
 				D470EC5526D596EA00E9C676 /* Main.storyboard */,
@@ -230,6 +233,7 @@
 			files = (
 				C6871A3F2DDADB1E00F17B07 /* YZDAutoLayoutHelper.swift in Sources */,
 				D44DEF6826DCF7A2006821A2 /* BasicPlayerViewController.swift in Sources */,
+				C6871A422DDC10FF00F17B07 /* ISGifCropViewController.swift in Sources */,
 				D470EC5426D596EA00E9C676 /* ViewController.swift in Sources */,
 				D470EC5026D596EA00E9C676 /* AppDelegate.swift in Sources */,
 				C6E275F12DD43AC100D353E0 /* ISVideoCropViewController.swift in Sources */,

@@ -308,3 +308,22 @@ extension UIColor {
     static let yzdBlue = UIColor(red: 0/255.0, green: 140/255.0, blue: 255/255.0, alpha: 1.0)
     
 }
+
+extension String {
+    func localized() -> String {
+        return NSLocalizedString(self, comment: "")
+    }
+    
+    var L: String {
+        return NSLocalizedString(self, comment: "")
+    }
+    
+    func localized(arguments: CVarArg...) -> String {
+        if arguments.count == 0 {
+            return NSLocalizedString(self, comment: "")
+        }
+        else {
+            return String(format: NSLocalizedString(self, comment: ""), arguments: arguments)
+        }
+    }
+}

@@ -276,7 +276,7 @@ class ISVideoCropViewController: YZDBaseVC {
         if let exporter = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetHighestQuality) {
             // 监听导出进度
             navigationView.progressView.progress = 0.1
-            exportProgressTimer = Timer(timeInterval: 0.05, repeats: true, block: { [weak exporter, weak self] _ in
+            let timer = Timer(timeInterval: 0.05, repeats: true, block: { [weak exporter, weak self] _ in
                 if let progress = exporter?.progress {
                     self?.navigationView.progressView.progress = max(0.1, CGFloat(progress))
                     if progress >= 1.0, self?.exportProgressTimer?.isValid == true {
@@ -284,6 +284,8 @@ class ISVideoCropViewController: YZDBaseVC {
                     }
                 }
             })
+            exportProgressTimer = timer
+            RunLoop.current.add(timer, forMode: .common)
             navigationView.hideProgress(hide: false)
             
             exporter.videoComposition = cropScaleComposition
@@ -295,6 +297,7 @@ class ISVideoCropViewController: YZDBaseVC {
                     self?.navigationView.progressView.progress = 1
                     if self?.exportProgressTimer?.isValid == true {
                         self?.exportProgressTimer?.invalidate()
+                        self?.exportProgressTimer = nil
                     }
                     
                     if let error = exporter?.error {
@@ -338,7 +341,7 @@ class ISNavigationView: UIView {
         addSubview(doneButton)
         addSubview(progressView)
         
-        backButton.yzd.sizeEqualTo(44, 44).leading(16).top().end()
+        backButton.yzd.sizeEqualTo(44, 44).leading(0).top().end()
         let backImageView = UIImageView(image: UIImage(named: "arrow_left_24")?.withRenderingMode(.alwaysTemplate))
         backImageView.isUserInteractionEnabled = false
         backImageView.tintColor = .white
@@ -348,7 +351,7 @@ class ISNavigationView: UIView {
             self?.onClose?()
         }), for: .touchUpInside)
         
-        doneButton.setTitle("完成"/*.L*/, for: .normal) // TODO: guan
+        doneButton.setTitle("完成".L, for: .normal)
         doneButton.setTitleColor(.tinctBlue, for: .normal)
         doneButton.titleLabel?.font = .systemFont(ofSize: 14, weight: .medium)
         doneButton.addAction(.init(handler: { [weak self] _ in
@@ -364,11 +367,11 @@ class ISNavigationView: UIView {
         progressView.showProgressText = true
         progressView.yzd.center(equalTo: doneButton).sizeEqualTo(26, 26).end()
         
-        titleLabel.text = "调整"//.L // TODO: guan
+        titleLabel.text = "调整".L
         titleLabel.textColor = .white
         titleLabel.textAlignment = .center
         titleLabel.font = .systemFont(ofSize: 18, weight: .semibold)
-        titleLabel.yzd.leadingEqualTo(anchor: backButton.trailingAnchor)
+        titleLabel.yzd.leadingEqualTo(anchor: backButton.trailingAnchor, 16)
             .trailingEqualTo(anchor: doneButton.leadingAnchor)
             .centerY().height()
             .end()
